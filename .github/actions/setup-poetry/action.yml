@@ -26,6 +26,7 @@ runs:
         version: ${{ inputs.poetry-version }}
         virtualenvs-in-project: true
         installer-parallel: true
+        plugins: poetry-plugin-export
 
     - name: Load cached venv
       id: cached-poetry-dependencies

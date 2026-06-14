@@ -72,8 +72,8 @@ poetry config keyring.enabled false
 
 4. Don't forget to add test cases for your added functionality in the `tests` directory.
 
-5. **Before every commit**, run the same quality checks as CI (`quality-check` job in
-   [`.github/workflows/main.yml`](.github/workflows/main.yml)). A skipped `make check`
+5. **Before every commit**, run the same quality checks as CI (`ci-check` workflow in
+   [`.github/workflows/ci-check.yml`](.github/workflows/ci-check.yml)). A skipped `make check`
    locally often means a red CI run (e.g. `black` reformatting `modpoll/modbus_task.py`).
 
     ```bash
@@ -190,6 +190,6 @@ gh release create vX.Y.Z --title "vX.Y.Z" --notes-file CHANGELOG-excerpt.md
 gh workflow run release-main --repo yoch/modpoll2mqtt --ref main
 ```
 
-CI on push (`main.yml`) runs tests and a **docs build check only** — it does not deploy the site.
+CI on push runs two workflows — `ci-check` (lint + docs build) and `ci-test` — and does not deploy the site.
 
 Happy Coding!

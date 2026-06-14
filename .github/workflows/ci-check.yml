@@ -1,6 +1,5 @@
-# CI on push/PR to main. On a fork, enable Actions once under
-# Settings → Actions → General if workflows never start automatically.
-name: main
+# Lint, lock file, dependency checks (make check), and docs build (make docs).
+name: ci-check
 
 on:
   push:
@@ -24,28 +23,7 @@ jobs:
       - name: Run checks
         run: make check
 
-  test:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    strategy:
-      matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
-      fail-fast: false
-    steps:
-      - name: Check out
-        uses: actions/checkout@v4
-
-      - name: Set up poetry
-        uses: ./.github/actions/setup-poetry
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Run unit tests
-        run: make test
-
   docs-build:
-    name: docs (build only)
     runs-on: ubuntu-latest
     permissions:
       contents: read
