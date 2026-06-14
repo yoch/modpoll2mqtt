@@ -179,7 +179,7 @@ def get_parser():
         default="name-with-unit",
         choices=_MQTT_KEYS_CHOICES,
         help=(
-            'MQTT JSON payload key format. "name-with-unit" appends "|unit" when '
+            'MQTT JSON payload key format. "name-with-unit" appends the unit suffix when '
             'configured (default). "name-only" uses reference names only.'
         ),
     )

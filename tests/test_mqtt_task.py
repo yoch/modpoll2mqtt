@@ -482,6 +482,7 @@ def test_connect_returns_false_after_close(monkeypatch):
 
 
 @pytest.mark.integration
+@pytest.mark.mqtt
 def test_mqtt_task_connect(mqtt_broker, unique_mqtt_client_id):
     host, port = mqtt_broker
     mqtt_handler = MqttHandler(

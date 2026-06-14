@@ -35,6 +35,7 @@ def _connect(handler: MqttHandler) -> None:
 
 
 @pytest.mark.integration
+@pytest.mark.mqtt
 def test_mqtt_integration_connect(mqtt_broker, unique_mqtt_client_id):
     handler = _make_handler(mqtt_broker, unique_mqtt_client_id)
     try:
@@ -44,6 +45,7 @@ def test_mqtt_integration_connect(mqtt_broker, unique_mqtt_client_id):
 
 
 @pytest.mark.integration
+@pytest.mark.mqtt
 def test_mqtt_integration_publish_qos0(
     mqtt_broker, unique_mqtt_client_id, unique_mqtt_topic
 ):
@@ -58,6 +60,7 @@ def test_mqtt_integration_publish_qos0(
 
 
 @pytest.mark.integration
+@pytest.mark.mqtt
 def test_mqtt_integration_publish_qos1(
     mqtt_broker, unique_mqtt_client_id, unique_mqtt_topic
 ):
@@ -74,6 +77,7 @@ def test_mqtt_integration_publish_qos1(
 
 
 @pytest.mark.integration
+@pytest.mark.mqtt
 def test_mqtt_integration_subscribe_and_receive(
     mqtt_broker, unique_mqtt_client_id, unique_mqtt_topic
 ):
@@ -103,6 +107,7 @@ def test_mqtt_integration_subscribe_and_receive(
 
 
 @pytest.mark.integration
+@pytest.mark.mqtt
 def test_mqtt_integration_mqtt_v311_connect(mqtt_broker, unique_mqtt_client_id):
     handler = _make_handler(mqtt_broker, unique_mqtt_client_id, mqtt_version="3.1.1")
     try:
@@ -112,6 +117,7 @@ def test_mqtt_integration_mqtt_v311_connect(mqtt_broker, unique_mqtt_client_id):
 
 
 @pytest.mark.integration
+@pytest.mark.mqtt
 def test_mqtt_integration_publish_reconnects_after_disconnect(
     mqtt_broker, unique_mqtt_client_id, unique_mqtt_topic
 ):
@@ -134,6 +140,7 @@ def test_mqtt_integration_publish_reconnects_after_disconnect(
 
 
 @pytest.mark.integration
+@pytest.mark.mqtt
 def test_mqtt_integration_new_handler_after_close(mqtt_broker, unique_mqtt_topic):
     """close() tears down the loop; a fresh handler can connect and publish."""
     client_id = f"modpoll-test-{unique_mqtt_topic.rsplit('/', 1)[-1][:16]}"

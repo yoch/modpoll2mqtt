@@ -11,7 +11,6 @@ from .modbus_task import setup_modbus_handlers, modbus_connect, modbus_close
 from . import __version__
 from .utils import set_threading_event, delay_thread, on_threading_event, get_utc_time
 
-
 LOG_SIMPLE = "%(asctime)s | %(levelname).1s | %(name)s | %(message)s"
 logger = None
 

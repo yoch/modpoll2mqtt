@@ -84,7 +84,7 @@ This is useful when subscribers (dashboards, automations) connect after ``modpol
 MQTT payload keys
 -----------------
 
-By default, grouped MQTT publish payloads use reference names as JSON keys, appending ``|unit`` when a unit is configured in the CSV (e.g. ``"temp|°C"``). Use ``--mqtt-keys name-only`` to publish keys without the unit suffix:
+By default, grouped MQTT publish payloads use reference names as JSON keys, appending ``\|unit`` when a unit is configured in the CSV (e.g. ``"temp\|°C"``). Use ``--mqtt-keys name-only`` to publish keys without the unit suffix:
 
 .. code-block:: shell
 
@@ -93,7 +93,7 @@ By default, grouped MQTT publish payloads use reference names as JSON keys, appe
 MQTT write commands
 -------------------
 
-Subscribe pattern (default): ``modpoll/+/set``. Publish to ``modpoll/<device>/set`` with a JSON object mapping reference names to values:
+Subscribe pattern (default): ``modpoll/+/set``. Publish to ``modpoll/{device}/set`` with a JSON object mapping reference names to values:
 
 .. code-block:: json
 

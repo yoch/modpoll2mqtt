@@ -34,9 +34,9 @@ Internal
 Features
 ~~~~~~~~
 
--  add ``--mqtt-keys name-only`` to publish MQTT JSON keys without
-   appending ``|unit`` (default remains ``name-with-unit``)
--  MQTT writes on ``modpoll/<device>/set`` accept a map of references
+-  add ``--mqtt-keys name-only`` to publish MQTT JSON keys without the
+   unit suffix (default key style remains ``name-with-unit``)
+-  MQTT writes on ``modpoll/{device}/set`` accept a map of references
    ``{"ref_a": val, "ref_b": val}`` in one message; unknown keys are
    skipped with a warning
 
@@ -65,7 +65,7 @@ Project
 Features
 ~~~~~~~~
 
--  semantic MQTT write by CSV reference on ``modpoll/<device>/set`` with
+-  semantic MQTT write by CSV reference on ``modpoll/{device}/set`` with
    payload ``ref`` and ``value`` (device from topic; scale, dtype, and
    endianness handled automatically)
 -  subscribe pattern ``modpoll/+/set`` by default

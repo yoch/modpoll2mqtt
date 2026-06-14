@@ -17,14 +17,14 @@ Publish to MQTT
 
     modpoll --tcp 192.168.1.10 --mqtt-host broker.emqx.io --config examples/modsim.csv
 
-With successful polling and publishing, subscribe to ``modpoll/<device_name>/data`` on the same broker to view the data.
+With successful polling and publishing, subscribe to ``modpoll/{device_name}/data`` on the same broker to view the data.
 
 Add ``--mqtt-retain`` so the broker keeps the last data message per topic for new subscribers (diagnostics are never retained). See :doc:`usage` for caveats.
 
 Write by reference
 ------------------
 
-Publish to ``modpoll/<device>/set``:
+Publish to ``modpoll/{device}/set``:
 
 .. code-block:: json
 

@@ -11,14 +11,13 @@
 
 Install the PyPI package as `modpoll2mqtt`; the executable command remains `modpoll`.
 
-Fork of [modpoll](https://github.com/gavinying/modpoll), with semantic MQTT writes by CSV reference name and CTA (air handling unit) examples.
+Fork of [modpoll](https://github.com/gavinying/modpoll), using the latest pymodbus release, with semantic MQTT writes by CSV reference name and numerous bugfixes and improvements.
 
 ## Features
 
 - Modbus RTU, TCP, and UDP (CSV configuration files)
 - Local display of polled data (debug mode)
 - MQTT publishing of references (configurable topics)
-- Optional MQTT retain on data publishes (`--mqtt-retain`)
 - MQTT writes by CSV reference name (`modpoll/<device>/set`)
 - Local CSV export of polled data
 - Bit-level access on registers and coils
@@ -78,14 +77,14 @@ Once connected to the broker, `modpoll` subscribes to `modpoll/+/set`. Publish t
 
 ```json
 {
-  "PID_V3V_EC_Consigne_reprise": 21.5,
-  "BP_MA_CTA": true
+  "holding_reg01": 100,
+  "coil01-08": true
 }
 ```
 
 Unknown reference names in the payload are skipped with a warning.
 
-Example with [`examples/CTA/cta_conf_restaurant.csv`](examples/CTA/cta_conf_restaurant.csv): an `int16` reference with scale `0.1` accepts `21.5` as input; the raw register value `215` is written.
+Example: an `int16` reference with scale `0.1` accepts `21.5` as input; the raw register value `215` is written.
 
 **Migration from modpoll 1.6.x:** the low-level format (`object_type`, `address`, `value`) is no longer supported.
 
@@ -111,9 +110,6 @@ modpoll --tcp 192.168.1.10 --mqtt-host localhost --export data.csv --config exam
 
 # Multiple config files
 modpoll --tcp 192.168.1.10 --config examples/modsim.csv examples/modsim2.csv
-
-# CTA (building automation example)
-modpoll --tcp 192.168.1.20 --mqtt-host localhost --config examples/CTA/cta_conf_restaurant.csv
 ```
 
 See [`examples/`](examples/) and [`contrib/`](contrib/) for more device configurations.

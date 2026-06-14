@@ -15,7 +15,6 @@ from .reference_write import _find_device, write_reference as _write_reference
 from .utils import on_threading_event, delay_thread
 from .mqtt_task import MqttHandler
 
-
 FLOAT_TYPE_PRECISION = 3
 MODBUS_WRITE_INTERVAL = 0.1
 _MODBUS_BACKOFF_BASE = 1.0

@@ -9,13 +9,13 @@ inputs:
   poetry-version:
     required: false
     description: "The poetry version to use"
-    default: "1.8.3"
+    default: "2.4.1"
 
 runs:
   using: "composite"
   steps:
     - name: Set up python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ inputs.python-version }}
         cache: "pip"
@@ -26,7 +26,6 @@ runs:
         version: ${{ inputs.poetry-version }}
         virtualenvs-in-project: true
         installer-parallel: true
-        plugins: poetry-plugin-export==1.8.0
 
     - name: Load cached venv
       id: cached-poetry-dependencies

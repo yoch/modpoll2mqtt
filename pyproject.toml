@@ -9,6 +9,7 @@ homepage = "https://github.com/yoch/modpoll2mqtt"
 readme = "README.md"
 packages = [{ include = "modpoll" }]
 license = "MIT"
+requires-poetry = ">=2.0,<3.0"
 keywords = [
     "modbus",
     "modpoll",
@@ -34,11 +35,15 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: System :: Networking",
     "Topic :: System :: Monitoring",
     "Topic :: Home Automation",
     "Topic :: Utilities",
 ]
+
+[tool.poetry.requires-plugins]
+poetry-plugin-export = ">=1.10"
 
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0"
@@ -52,16 +57,15 @@ pyserial = { version = "^3.5", optional = true }
 serial = ["pyserial"]
 
 [tool.poetry.group.dev.dependencies]
-pre-commit = "^3.5.0"
+pre-commit = "^4.0"
 pytest = "^8.2.2"
-deptry = "^0.16.1"
-tox = "^4.16.0"
+deptry = "^0.25"
 
 [tool.poetry.group.docs.dependencies]
-sphinx = ">=6,<8"
-sphinx-argparse = "^0.3.1"
-sphinx-rtd-theme = "^1.0.0"
-sphinx-autobuild = "2021.3.14"
+sphinx = ">=7,<10"
+sphinx-argparse = "^0.5.2"
+sphinx-rtd-theme = "^3.1"
+sphinx-autobuild = { version = "^2025.8", python = ">=3.11,<4.0" }
 pandoc = "^2.3"
 
 [build-system]
@@ -75,8 +79,13 @@ package_module_name_map = { pyserial = "serial" }
 DEP002 = ["pyserial"]
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
 testpaths = ["tests"]
-markers = ["integration: marks tests as integration tests"]
+markers = [
+    "integration: marks tests as integration tests",
+    "modbus: Modbus TCP integration tests",
+    "mqtt: MQTT broker integration tests",
+]
 
 [tool.poetry.scripts]
 modpoll = "modpoll.main:app"

@@ -40,7 +40,13 @@ If you are proposing a new feature:
 
 Ready to contribute? Here's how to set up the project for local development.
 
-Here we assume you already have `python`, `poetry`, and `Git` installed. Otherwise, you can use the [asdf](https://github.com/asdf-vm/asdf) tool to manage the required tools or install them manually according to the `.tool-versions` file.
+Here we assume you already have `python`, `poetry`, and `Git` installed. Otherwise, you can use the [asdf](https://github.com/asdf-vm/asdf) tool to manage the required tools or install them manually according to the [`.tool-versions`](.tool-versions) file (Python 3.12+, Poetry 2.4.x, pandoc 3.10).
+
+On Linux with KDE Wallet or other desktop keyrings, disable Poetry's keyring integration to avoid spurious authorization prompts:
+
+```bash
+poetry config keyring.enabled false
+```
 
 1. Fork the `modpoll2mqtt` repo on GitHub, and then clone your fork locally,
 
@@ -53,6 +59,7 @@ Here we assume you already have `python`, `poetry`, and `Git` installed. Otherwi
 
     ```bash
     make install
+    source .venv/bin/activate
     ```
 
 3. Create a branch for local development,
@@ -82,6 +89,29 @@ Here we assume you already have `python`, `poetry`, and `Git` installed. Otherwi
     ```bash
     make test
     ```
+
+    For the full local CI gate (same as pull request checks):
+
+    ```bash
+    make ci
+    ```
+
+    Integration tests are optional and split by dependency:
+
+    ```bash
+    make test-integration-modbus   # auto-starts a local Modbus TCP simulator on port 1502 if needed
+    make test-integration-mqtt     # requires a broker (default broker.emqx.io)
+    make test-integration          # both
+    ```
+
+    If Modbus integration tests skip, start the simulator manually:
+
+    ```bash
+    poetry run python tests/modbus_integration.py
+    ```
+
+    Override endpoints with `MODBUS_TEST_HOST` / `MODBUS_TEST_PORT` or
+    `MQTT_TEST_HOST` / `MQTT_TEST_PORT` when needed.
 
 6. Commit your changes and push your branch to GitHub:
 
@@ -133,8 +163,7 @@ tagging a release.
 7. **Quality gate** — run the same checks as CI before tagging:
 
    ```bash
-   make check
-   make test
+   make ci
    ```
 
    If `make check` reformats files (e.g. `black`), stage the fixes and amend or
@@ -147,7 +176,7 @@ tagging a release.
 # 2. finalize CHANGELOG.md (move [Unreleased] → [X.Y.Z])
 # 3. complete the documentation checklist above
 make docs-changelog
-make check && make test
+make ci
 git tag vX.Y.Z
 # after push + release workflow: verify https://yoch.github.io/modpoll2mqtt/changelog.html
 git push origin main
