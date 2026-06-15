@@ -1,47 +1,22 @@
-"""Regression tests for real-world bugs and documented limitations."""
+"""ModbusHandler behavior: regressions, documented contracts, and config validation."""
 
+import csv
+import io
 import json
+from math import inf
 from unittest.mock import MagicMock
 
 import pytest
 
-
 from modpoll.arg_parser import get_parser
 from modpoll.modbus_task import Device, Poller, Reference, ModbusHandler
 from modpoll.mqtt_task import MqttHandler
-
-
-class FakeModbusResult:
-    def __init__(self, *, bits=None, registers=None, error=False):
-        self.bits = bits
-        self.registers = registers
-        self._error = error
-
-    def isError(self):
-        return self._error
-
-
-class FakeModbusMaster:
-    def __init__(self, *, bits=None, registers=None, fail_addresses=None):
-        self.bits = bits
-        self.registers = registers
-        self.fail_addresses = set(fail_addresses or [])
-
-    def read_coils(self, address, *, count=1, device_id=1):
-        return FakeModbusResult(bits=self.bits)
-
-    def read_discrete_inputs(self, address, *, count=1, device_id=1):
-        return FakeModbusResult(bits=self.bits)
-
-    def read_holding_registers(self, address, *, count=1, device_id=1):
-        if address in self.fail_addresses:
-            return FakeModbusResult(error=True)
-        return FakeModbusResult(registers=self.registers)
-
-    def read_input_registers(self, address, *, count=1, device_id=1):
-        if address in self.fail_addresses:
-            return FakeModbusResult(error=True)
-        return FakeModbusResult(registers=self.registers)
+from tests.helpers.modbus import (
+    FakeModbusMaster,
+    FakeModbusResult,
+    handler_with_device,
+    log_messages,
+)
 
 
 def _device_with_two_register_pollers():
@@ -133,7 +108,26 @@ def test_failed_modbus_connect_clears_poll_success_and_skips_mqtt():
 
     assert device.pollSuccess is False
     handler.publish_data()
-    assert not mqtt.publish.called
+    mqtt.publish_data_message.assert_not_called()
+
+
+def test_publish_skips_device_when_poll_failed():
+    device = Device("dev", 1)
+    device.pollSuccess = False
+    ref = Reference(device, "temp", "0", "uint16", "r", None, None)
+    ref.val = 42
+    device.references = {"temp": ref}
+
+    mqtt = MagicMock()
+    handler = ModbusHandler(
+        MagicMock(),
+        "dummy.csv",
+        mqtt_handler=mqtt,
+        mqtt_publish_topic_pattern="t/{{device_name}}",
+    )
+    handler.deviceList = [device]
+    handler.publish_data()
+    mqtt.publish_data_message.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -495,13 +489,13 @@ def test_export_omits_non_finite_floats(tmp_path):
     assert data == {"dev": {"good": 1.5}}
 
 
-def test_mqtt_single_publishes_bool_as_json():
+def test_mqtt_single_publishes_per_reference_topics():
     device = Device("dev", 1)
     device.pollSuccess = True
     bool_ref = Reference(device, "flag", "0", "bool", "r", None, None)
     bool_ref.val = True
     list_ref = Reference(device, "flags", "1", "bool8", "r", None, None)
-    list_ref.val = [True, False]
+    list_ref.val = [True, False, True, False, False, False, False, False]
     device.references = {"flag": bool_ref, "flags": list_ref}
 
     mqtt = MagicMock()
@@ -509,7 +503,7 @@ def test_mqtt_single_publishes_bool_as_json():
         MagicMock(),
         "dummy.csv",
         mqtt_handler=mqtt,
-        mqtt_publish_topic_pattern="t/{{device_name}}",
+        mqtt_publish_topic_pattern="modpoll/{{device_name}}/data",
         mqtt_single_publish=True,
     )
     handler.deviceList = [device]
@@ -518,9 +512,9 @@ def test_mqtt_single_publishes_bool_as_json():
     published = {
         call[0][0]: call[0][1] for call in mqtt.publish_data_message.call_args_list
     }
-    assert published["t/dev/flag"] == "true"
-    assert published["t/dev/flags/0"] == "true"
-    assert published["t/dev/flags/1"] == "false"
+    assert published["modpoll/dev/data/flag"] == "true"
+    assert published["modpoll/dev/data/flags/0"] == "true"
+    assert published["modpoll/dev/data/flags/7"] == "false"
 
 
 def test_publish_data_omits_non_finite_floats():
@@ -528,9 +522,11 @@ def test_publish_data_omits_non_finite_floats():
     device.pollSuccess = True
     good = Reference(device, "good", "0", "float32", "r", None, None)
     good.val = 1.5
-    bad = Reference(device, "nan", "2", "float32", "r", None, None)
-    bad.val = float("nan")
-    device.references = {"good": good, "nan": bad}
+    nan_ref = Reference(device, "nan", "2", "float32", "r", None, None)
+    nan_ref.val = float("nan")
+    inf_ref = Reference(device, "inf", "4", "float32", "r", None, None)
+    inf_ref.val = inf
+    device.references = {"good": good, "nan": nan_ref, "inf": inf_ref}
 
     mqtt = MagicMock()
     handler = ModbusHandler(
@@ -546,10 +542,187 @@ def test_publish_data_omits_non_finite_floats():
     assert payload == {"good": 1.5}
 
 
-def test_invalid_endian_aborts_config_load(caplog):
-    import csv
-    import io
+# ---------------------------------------------------------------------------
+# Documented write contracts
+# ---------------------------------------------------------------------------
 
+
+def _device_with_bool8_coil_ref():
+    device = Device("dev", 1)
+    poller = Poller(device, 1, 0, 16, "BE_BE")
+    ref = Reference(device, "coil01-08", "0", "bool8", "rw", None, None)
+    poller.add_readable_reference(ref)
+    device.pollerList = [poller]
+    device.references = {"coil01-08": ref}
+    return device
+
+
+def test_write_bool8_rejects_scalar_boolean():
+    device = _device_with_bool8_coil_ref()
+    master = FakeModbusMaster(coils=[False] * 16)
+    handler = handler_with_device(device, master)
+    assert handler.write_reference("dev", "coil01-08", True) is False
+    assert master.writes == []
+
+
+def test_write_bool8_accepts_list_of_eight():
+    device = _device_with_bool8_coil_ref()
+    master = FakeModbusMaster(coils=[False] * 16)
+    handler = handler_with_device(device, master)
+    flags = [True, False, True, False, False, False, False, False]
+    assert handler.write_reference("dev", "coil01-08", flags) is True
+    assert master.writes[0][0] == "coils"
+    assert master.writes[0][2][0:8] == flags
+
+
+def test_write_rejects_discrete_input():
+    device = Device("dev", 1)
+    poller = Poller(device, 2, 10000, 8, "BE_BE")
+    ref = Reference(device, "di01", "10000", "bool", "rw", None, None)
+    poller.add_readable_reference(ref)
+    device.pollerList = [poller]
+    device.references = {"di01": ref}
+
+    master = FakeModbusMaster(coils=[False] * 8)
+    handler = handler_with_device(device, master)
+    assert handler.write_reference("dev", "di01", True) is False
+    assert master.writes == []
+
+
+def test_export_json_shape(tmp_path):
+    device = Device("modsim01", 1)
+    ref = Reference(device, "holding_reg01", "40000", "uint16", "r", None, None)
+    ref.val = 100
+    device.references = {"holding_reg01": ref}
+
+    handler = ModbusHandler(MagicMock(), "dummy.csv")
+    handler.deviceList = [device]
+    export_file = tmp_path / "out.json"
+    handler.export(str(export_file))
+
+    data = json.loads(export_file.read_text())
+    assert data == {"modsim01": {"holding_reg01": 100}}
+
+
+def test_export_includes_timestamp_when_provided(tmp_path):
+    device = Device("dev", 1)
+    ref = Reference(device, "temp", "0", "uint16", "r", None, None)
+    ref.val = 21
+    device.references = {"temp": ref}
+
+    handler = ModbusHandler(MagicMock(), "dummy.csv")
+    handler.deviceList = [device]
+    export_file = tmp_path / "out.json"
+    handler.export(str(export_file), timestamp=1710000000.0)
+
+    data = json.loads(export_file.read_text())
+    assert data["dev"]["timestamp"] == 1710000000.0
+    assert data["dev"]["temp"] == 21
+
+
+# ---------------------------------------------------------------------------
+# Config parsing contracts
+# ---------------------------------------------------------------------------
+
+
+def test_parse_config_accepts_hex_address():
+    config = "\n".join(
+        [
+            "device,dev,1",
+            "poll,holding_register,16,2,BE_BE",
+            "ref,hex_ref,0x10,uint16,r",
+        ]
+    )
+    handler = ModbusHandler(MagicMock(), "unused")
+    devices = handler._parse_config(csv.reader(io.StringIO(config)))
+    assert len(devices) == 1
+    assert devices[0].references["hex_ref"].address == 0x10
+
+
+def test_poller_rejects_register_poll_over_123(caplog):
+    config = "\n".join(
+        [
+            "device,dev,1",
+            "poll,holding_register,0,124,BE_BE",
+        ]
+    )
+    handler = ModbusHandler(MagicMock(), "unused")
+    with caplog.at_level("ERROR"):
+        devices = handler._parse_config(csv.reader(io.StringIO(config)))
+    assert len(devices) == 1
+    assert devices[0].pollerList == []
+    assert any("Too many registers" in m for m in log_messages(caplog, "ERROR"))
+
+
+def test_poller_rejects_coil_poll_over_2000(caplog):
+    config = "\n".join(
+        [
+            "device,dev,1",
+            "poll,coil,0,2001,BE_BE",
+        ]
+    )
+    handler = ModbusHandler(MagicMock(), "unused")
+    with caplog.at_level("ERROR"):
+        devices = handler._parse_config(csv.reader(io.StringIO(config)))
+    assert len(devices) == 1
+    assert devices[0].pollerList == []
+    assert any("Too many coils" in m for m in log_messages(caplog, "ERROR"))
+
+
+def test_warn_writable_mark_on_discrete_input(caplog):
+    config = "\n".join(
+        [
+            "device,dev,1",
+            "poll,discrete_input,10000,8,BE_BE",
+            "ref,di01,10000,bool,rw",
+        ]
+    )
+    handler = ModbusHandler(MagicMock(), "unused")
+    with caplog.at_level("WARNING"):
+        devices = handler._parse_config(csv.reader(io.StringIO(config)))
+    assert len(devices) == 1
+    assert "di01" in devices[0].references
+    warnings = log_messages(caplog, "WARNING")
+    assert any(
+        "di01" in m and "discrete_input" in m and "read-only" in m for m in warnings
+    )
+
+
+def test_warn_writable_mark_on_input_register(caplog):
+    config = "\n".join(
+        [
+            "device,dev,1",
+            "poll,input_register,30000,2,BE_BE",
+            "ref,input_reg01,30000,uint16,w",
+        ]
+    )
+    handler = ModbusHandler(MagicMock(), "unused")
+    with caplog.at_level("WARNING"):
+        devices = handler._parse_config(csv.reader(io.StringIO(config)))
+    assert len(devices) == 1
+    assert "input_reg01" in devices[0].references
+    warnings = log_messages(caplog, "WARNING")
+    assert any(
+        "input_reg01" in m and "input_register" in m and "read-only" in m
+        for m in warnings
+    )
+
+
+def test_no_warn_read_only_mark_on_discrete_input(caplog):
+    config = "\n".join(
+        [
+            "device,dev,1",
+            "poll,discrete_input,10000,8,BE_BE",
+            "ref,di01,10000,bool,r",
+        ]
+    )
+    handler = ModbusHandler(MagicMock(), "unused")
+    with caplog.at_level("WARNING"):
+        handler._parse_config(csv.reader(io.StringIO(config)))
+    assert not any("read-only" in m for m in log_messages(caplog, "WARNING"))
+
+
+def test_invalid_endian_aborts_config_load(caplog):
     config = "\n".join(
         [
             "device,dev,1",
@@ -564,9 +737,6 @@ def test_invalid_endian_aborts_config_load(caplog):
 
 
 def test_duplicate_device_name_aborts_config(caplog):
-    import csv
-    import io
-
     config = "\n".join(
         [
             "device,same,1",
@@ -582,9 +752,6 @@ def test_duplicate_device_name_aborts_config(caplog):
 
 
 def test_shared_slave_id_logs_warning_and_loads(caplog):
-    import csv
-    import io
-
     config = "\n".join(
         [
             "device,devA,1",
@@ -602,9 +769,6 @@ def test_shared_slave_id_logs_warning_and_loads(caplog):
 
 
 def test_shared_slave_id_adjacent_ranges_no_overlap_warning(caplog):
-    import csv
-    import io
-
     config = "\n".join(
         [
             "device,cta_conf,1",
@@ -630,9 +794,6 @@ def test_shared_slave_id_adjacent_ranges_no_overlap_warning(caplog):
 
 
 def test_overlapping_poller_ranges_warns(caplog):
-    import csv
-    import io
-
     config = "\n".join(
         [
             "device,devA,1",
@@ -654,9 +815,6 @@ def test_overlapping_poller_ranges_warns(caplog):
 
 
 def test_duplicate_poller_skipped(caplog):
-    import csv
-    import io
-
     config = "\n".join(
         [
             "device,dev,1",
@@ -677,9 +835,6 @@ def test_duplicate_poller_skipped(caplog):
 
 
 def test_duplicate_ref_across_pollers_ignored(caplog):
-    import csv
-    import io
-
     config = "\n".join(
         [
             "device,dev,1",
@@ -700,9 +855,6 @@ def test_duplicate_ref_across_pollers_ignored(caplog):
 
 
 def test_poller_size_zero_ignored(caplog):
-    import csv
-    import io
-
     config = "\n".join(
         [
             "device,dev,1",

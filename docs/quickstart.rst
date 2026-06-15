@@ -32,4 +32,4 @@ Publish to ``modpoll/{device}/set``:
       "holding_reg01": 42
     }
 
-See :doc:`usage` for details on MQTT topics and write semantics.
+See :doc:`usage` for MQTT topics, write constraints (including ``bool8`` array values), and read-only object types.

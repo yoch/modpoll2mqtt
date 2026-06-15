@@ -606,7 +606,20 @@ class ModbusHandler:
                 f"Reference {ref.name} failed to pass sanity check, ignoring it."
             )
             return False
+        self._warn_if_read_only_poller_marked_writable(ref, current_poller)
         return True
+
+    def _warn_if_read_only_poller_marked_writable(self, ref, current_poller):
+        if current_poller.fc not in (2, 4) or "w" not in ref.rw:
+            return
+        object_type = (
+            "discrete_input" if current_poller.fc == 2 else "input_register"
+        )
+        self.logger.warning(
+            f"Reference {ref.name} is marked '{ref.rw}' on an {object_type} poller; "
+            "Modbus inputs are read-only and MQTT writes to this reference will be "
+            "rejected."
+        )
 
     def _begin_poll_cycle(self):
         for dev in self.deviceList:

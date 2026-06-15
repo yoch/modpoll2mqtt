@@ -35,6 +35,34 @@ Commandline Usage
 
     modpoll --tcp 192.168.1.10 --config examples/modsim.csv --export data.csv
 
+- Connect to Modbus UDP device
+
+  .. code-block:: shell
+
+    modpoll --udp 192.168.1.10 --config examples/modsim.csv
+
+Configuration sources
+---------------------
+
+``--config`` accepts one or more local file paths or HTTP(S) URLs. Multiple files are loaded into separate logical configs that share the same Modbus connection.
+
+If columns are not split correctly (for example tab-separated files), use ``--csv-delimiter tab`` (default: ``comma``).
+
+Export
+------
+
+``--export`` writes polled reference values to a JSON file keyed by device name, then by reference name. Use ``--timestamp`` to add a ``timestamp`` field to each device's export object and to grouped MQTT publish payloads.
+
+.. code-block:: shell
+
+    modpoll --tcp 192.168.1.10 --config examples/modsim.csv --export data.json --timestamp
+
+Operational flags
+-----------------
+
+- ``--no-output`` suppresses poll result tables on stdout (replaces the former ``--daemon`` / ``-d`` flag; does not fork).
+- ``--delay`` waits N seconds after connecting before the first Modbus poll.
+
 Configuration File
 ------------------
 
@@ -90,6 +118,23 @@ By default, grouped MQTT publish payloads use reference names as JSON keys, appe
 
     modpoll --tcp 192.168.1.10 --mqtt-host localhost --mqtt-keys name-only --config examples/modsim.csv
 
+MQTT single publish
+-------------------
+
+By default, all references for a device are published in one JSON object on the data topic. With ``--mqtt-single``, each reference is published on its own topic under the publish pattern, e.g. ``modpoll/{device}/data/{ref_name}``. List values (``bool8`` / ``bool16``) are split into indexed sub-topics (``.../{ref_name}/0``, ``.../1``, …).
+
+MQTT diagnostics
+----------------
+
+When ``--diagnostics-rate`` is greater than zero, ``modpoll`` periodically publishes diagnostics to ``--mqtt-diagnostics-topic-pattern`` (default ``modpoll/{device}/diagnostics``). The JSON payload contains ``poll_count``, ``error_count``, and ``last_poll_success``. Diagnostics messages are never retained.
+
+Publish behavior
+----------------
+
+- Data is not published for a device unless its latest poll cycle succeeded (``last_poll_success`` in diagnostics).
+- References with no value (``null``) are omitted from grouped MQTT payloads.
+- Non-finite floats (``NaN``, ``Inf``) are omitted from MQTT publish and export.
+
 MQTT write commands
 -------------------
 
@@ -106,6 +151,10 @@ Subscribe pattern (default): ``modpoll/+/set``. Publish to ``modpoll/{device}/se
 - Reference names in the payload must match the CSV configuration; unknown keys are skipped with a warning.
 - Values use the same decoded engineering units as MQTT publish (scale and dtype from the CSV are handled by modpoll).
 - Only references marked ``rw`` or ``w`` in the CSV can be written.
+- Only ``coil`` and ``holding_register`` pollers are writable; ``discrete_input`` and ``input_register`` are read-only at the Modbus protocol level even when marked ``rw``.
+- ``bool`` on coils or registers (including ``address:bit``) expects a scalar boolean.
+- ``bool8`` / ``bool16`` expect a JSON array of 8 or 16 booleans.
+- ``stringNNN`` references expect a string value.
 - Multiple references can be written in a single message.
 
 Duplicate reference names on the same device are rejected when loading the config file.

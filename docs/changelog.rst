@@ -1,14 +1,47 @@
 Changelog
 =========
 
+[Unreleased]
+------------
+
+Features
+~~~~~~~~
+
+-  warn at config load when a reference is marked ``w``/``rw`` on a
+   ``discrete_input`` or ``input_register`` poller (Modbus inputs are
+   read-only)
+
+Documentation
+~~~~~~~~~~~~~
+
+-  fix README MQTT write example for ``bool8`` references (array of 8
+   booleans, not a scalar)
+-  document export, diagnostics, mqtt-single, config sources, write
+   constraints, and publish behavior in ``docs/usage.rst``
+-  expand ``docs/configure.rst`` with CSV schema, dtypes, poll limits,
+   and validation rules
+-  correct ``config_template.csv`` comment: dtype column is required
+
+Tests
+~~~~~
+
+-  add contract tests in ``tests/test_handler_behavior.py`` for
+   documented edge cases
+-  consolidate handler regression/contract tests; share
+   ``FakeModbusMaster`` in ``tests/helpers/modbus.py``
+
 `2.1.1 <https://github.com/yoch/modpoll2mqtt/compare/v2.1.0...v2.1.1>`__ (2026-06-11)
 -------------------------------------------------------------------------------------
+
+.. _features-1:
 
 Features
 ~~~~~~~~
 
 -  add ``--mqtt-retain`` to set the MQTT retain flag on data publishes
    (diagnostics topics are never retained)
+
+.. _documentation-1:
 
 Documentation
 ~~~~~~~~~~~~~
@@ -29,7 +62,7 @@ Internal
 `2.1.0 <https://github.com/yoch/modpoll2mqtt/compare/v2.0.0...v2.1.0>`__ (2026-06-10)
 -------------------------------------------------------------------------------------
 
-.. _features-1:
+.. _features-2:
 
 Features
 ~~~~~~~~
@@ -60,7 +93,7 @@ Project
    package renamed to ``modpoll2mqtt``, repository ``yoch/modpoll2mqtt``
 -  CLI command and Python module remain ``modpoll``
 
-.. _features-2:
+.. _features-3:
 
 Features
 ~~~~~~~~

@@ -79,15 +79,21 @@ Once connected to the broker, `modpoll` subscribes to `modpoll/+/set`. Publish t
 ```json
 {
   "holding_reg01": 100,
-  "coil01-08": true
+  "coil01-08": [true, false, false, false, false, false, false, false]
 }
 ```
 
 Unknown reference names in the payload are skipped with a warning.
 
+`bool8` / `bool16` references require a JSON array of 8 or 16 booleans at write time. Single-coil `bool` references accept a scalar boolean.
+
 Example: an `int16` reference with scale `0.1` accepts `21.5` as input; the raw register value `215` is written.
 
+Only `coil` and `holding_register` references can be written. `input_register` and `discrete_input` are read-only at the Modbus protocol level even when marked `rw` in the CSV.
+
 **Migration from modpoll 1.6.x:** the low-level format (`object_type`, `address`, `value`) is no longer supported.
+
+**Migration from modpoll2mqtt 2.0.x:** the `{"ref": "...", "value": ...}` object format was removed in 2.1.0; use a reference map (`{"ref_name": value}`) instead.
 
 ### Configuration pitfalls
 
