@@ -9,6 +9,10 @@ def set_threading_event():
     _thread_event.set()
 
 
+def clear_threading_event():
+    _thread_event.clear()
+
+
 def on_threading_event() -> bool:
     return _thread_event.is_set()
 

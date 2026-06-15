@@ -128,6 +128,9 @@ def test_write_references_batch(caplog):
 
     assert master.writes == [("register", 0, 10), ("register", 1, 20)]
     assert "Wrote 2 value(s) for device=cta_conf" in caplog.text
+    assert device.setCount == 1
+    assert device.setSuccess == 1
+    assert device.setErrors == 0
 
 
 def test_write_references_skips_unknown(caplog):
@@ -145,6 +148,10 @@ def test_write_references_skips_unknown(caplog):
 
     assert master.writes == [("register", 0, 10)]
     assert "Unknown reference 'missing'" in caplog.text
+    assert device.setCount == 1
+    assert device.setErrors == 1
+    assert device.setUnknownRefs == 1
+    assert device.setSuccess == 0
 
 
 def test_write_references_empty_after_filter(caplog):

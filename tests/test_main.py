@@ -103,7 +103,7 @@ def test_mqtt_tls_cli_options_forwarded(monkeypatch):
     assert init_args["cacerts"] == "/tmp/ca.pem"
     assert init_args["insecure"] is True
     assert init_args["mqtt_version"] == "3.1.1"
-    assert init_args["subscribe_topics"] == ["modpoll/+/set"]
+    assert init_args["subscribe_topics"] == ["modpoll/+/set", "modpoll/+/get"]
     assert init_args["retain_data_publishes"] is False
 
 
@@ -224,6 +224,30 @@ def test_extract_device_from_mqtt_topic():
     )
     assert main.extract_device_from_mqtt_topic(pattern, "modpoll/dev/set") == "dev"
     assert main.extract_device_from_mqtt_topic(pattern, "xmodpoll/dev/set") is None
+
+
+def test_classify_mqtt_command_topic():
+    set_p = "modpoll/+/set"
+    get_p = "modpoll/+/get"
+    assert main.classify_mqtt_command_topic(set_p, get_p, "modpoll/dev/set") == (
+        "set",
+        "dev",
+    )
+    assert main.classify_mqtt_command_topic(set_p, get_p, "modpoll/dev/get") == (
+        "get",
+        "dev",
+    )
+    assert main.classify_mqtt_command_topic(set_p, get_p, "other/dev/set") == (
+        None,
+        None,
+    )
+
+
+def test_mqtt_get_response_topic():
+    assert (
+        main.mqtt_get_response_topic("modpoll/+/get", "cta_conf")
+        == "modpoll/cta_conf/get/response"
+    )
 
 
 def test_mqtt_setup_close_errors_are_suppressed(monkeypatch):

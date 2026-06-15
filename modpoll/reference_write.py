@@ -6,28 +6,15 @@ from typing import TYPE_CHECKING, Optional
 
 from pymodbus.exceptions import ModbusException
 
+from .reference_common import (
+    call_with_device_id as _call_with_device_id,
+    find_device as _find_device,
+    find_poller_for_ref as _find_poller_for_ref,
+)
 from .register_decode import ENDIAN_MAP, RegisterEncoder
 
 if TYPE_CHECKING:
     from .modbus_task import Device, ModbusHandler, Poller, Reference
-
-
-def _call_with_device_id(method, *args, device_id: int, **kwargs):
-    return method(*args, device_id=device_id, **kwargs)
-
-
-def _find_device(handler: "ModbusHandler", device_name: str) -> Optional["Device"]:
-    for dev in handler.deviceList:
-        if dev.name == device_name:
-            return dev
-    return None
-
-
-def _find_poller_for_ref(dev: "Device", ref: "Reference") -> Optional["Poller"]:
-    for poller in dev.pollerList:
-        if ref.check_sanity(poller.start_address, poller.size, poller.fc):
-            return poller
-    return None
 
 
 def _value_to_raw(ref: "Reference", value):

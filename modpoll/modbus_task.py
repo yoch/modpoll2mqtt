@@ -11,7 +11,12 @@ from pymodbus.exceptions import ModbusException
 from pymodbus.framer import FramerType
 
 from .register_decode import ENDIAN_MAP, Endian, RegisterDecoder
-from .reference_write import _find_device, write_reference as _write_reference
+from .reference_write import write_reference as _write_reference
+from .reference_read import read_references as _read_references
+from .reference_common import (
+    call_with_device_id as _call_with_device_id,
+    find_device as _find_device,
+)
 from .utils import on_threading_event, delay_thread
 from .mqtt_task import MqttHandler
 
@@ -41,8 +46,23 @@ def _mqtt_payload_key(ref: "Reference", mqtt_keys: str) -> str:
     raise ValueError(f"Unknown mqtt_keys: {mqtt_keys}")
 
 
-def _call_with_device_id(method, *args, device_id: int, **kwargs):
-    return method(*args, device_id=device_id, **kwargs)
+def format_mqtt_scalar(val):
+    """Return an MQTT-safe scalar, or None to omit (non-finite float)."""
+    if isinstance(val, float) and not math.isfinite(val):
+        return None
+    if isinstance(val, float):
+        return round(val, FLOAT_TYPE_PRECISION)
+    return val
+
+
+def format_mqtt_payload_values(values: dict) -> dict:
+    out = {}
+    for key, val in values.items():
+        mqtt_val = format_mqtt_scalar(val)
+        if mqtt_val is None and isinstance(val, float):
+            continue
+        out[key] = mqtt_val
+    return out
 
 
 def _poller_identity(poller: "Poller") -> tuple:
@@ -93,6 +113,15 @@ class Device:
         self.errorCount = 0
         self.pollCount = 0
         self.pollSuccess = False
+        self.getCount = 0
+        self.getErrors = 0
+        self.getSuccess = 0
+        self.getUnknownRefs = 0
+        self.getReadErrors = 0
+        self.setCount = 0
+        self.setErrors = 0
+        self.setSuccess = 0
+        self.setUnknownRefs = 0
 
     def add_reference_mapping(self, ref):
         self.references[ref.name] = ref
@@ -147,7 +176,8 @@ class Poller:
                     )
                     for ref in sorted_refs:
                         try:
-                            self._decode_coil_reference(ref, bits)
+                            value = self.decode_coil_bits(ref, bits, self.start_address)
+                            ref.update_value(value)
                         except IndexError:
                             self.logger.error(
                                 f"Reference {ref.name} address {ref.address} is outside "
@@ -164,17 +194,12 @@ class Poller:
                         self.readableReferences, key=lambda r: r.address
                     )
                     for ref in sorted_refs:
-                        # Create and position a new decoder for each reference for robustness
-                        decoder = self._get_decoder(data)
-                        offset_bytes = (ref.address - self.start_address) * 2
-                        if offset_bytes < 0:
-                            self.logger.warning(
-                                f"Reference {ref.name} address {ref.address} is outside of poller range starting at {self.start_address}"
-                            )
-                            continue
-                        decoder.skip_bytes(offset_bytes)
                         try:
-                            self._decode_and_update_reference(ref, decoder)
+                            ref.update_value(
+                                self.decode_register_block(
+                                    ref, data, self.start_address
+                                )
+                            )
                         except Exception as e:
                             self.logger.error(
                                 f"Failed to decode value for reference: {ref.name} - {e}"
@@ -198,42 +223,46 @@ class Poller:
             data, byteorder=byteorder, wordorder=wordorder
         )
 
-    def _get_decoder(self, data):
-        return self.get_decoder(data)
+    def decode_coil_bits(self, ref: "Reference", bits: list, read_start: int):
+        """Decode a single reference from a coil/discrete_input read.
 
-    def _decode_coil_reference(self, ref: "Reference", bits: list) -> None:
-        """Decode a single reference from a coil/discrete_input poll result.
-
-        bool8/bool16 groups shorter than 8/16 bits (poll ends mid-group) are padded
-        with False to the expected width.
+        ``read_start`` is the Modbus address corresponding to ``bits[0]``.
+        bool8/bool16 groups shorter than 8/16 bits are padded with False.
         """
         if ref.dtype == "bool" and ref.bit is None:
-            bit_offset = ref.address - self.start_address
-            ref.update_value(bool(bits[bit_offset]))
-        elif ref.dtype in ("bool8", "bool16"):
+            bit_offset = ref.address - read_start
+            return bool(bits[bit_offset])
+        if ref.dtype in ("bool8", "bool16"):
             group_offset = ref.address - self.start_address
-            bit_offset = group_offset * 8
+            bit_offset = group_offset * 8 - (read_start - self.start_address)
             width = 8 if ref.dtype == "bool8" else 16
             values = bits[bit_offset : bit_offset + width]
-            ref.update_value(values + [False] * (width - len(values)))
-        else:
-            raise ValueError(
-                f"Unsupported dtype '{ref.dtype}' on coil/discrete_input poller"
-            )
+            return values + [False] * (width - len(values))
+        raise ValueError(
+            f"Unsupported dtype '{ref.dtype}' on coil/discrete_input poller"
+        )
 
-    def _decode_and_update_reference(self, ref: "Reference", decoder: RegisterDecoder):
+    def decode_register_block(self, ref: "Reference", registers: list, read_start: int):
+        """Decode a single reference from a register read starting at ``read_start``."""
+        offset_bytes = (ref.address - read_start) * 2
+        if offset_bytes < 0:
+            raise ValueError(
+                f"Reference {ref.name} address {ref.address} is outside read "
+                f"block starting at {read_start}"
+            )
+        decoder = self.get_decoder(registers)
+        decoder.skip_bytes(offset_bytes)
+        return self._decode_register_value(ref, decoder)
+
+    def _decode_register_value(self, ref: "Reference", decoder: RegisterDecoder):
         if ref.dtype == "bool" and ref.bit is not None:
-            # Bit references read a 16-bit register and extract one bit.
             register_value = decoder.decode_16bit_uint()
-            bit_value = (register_value >> ref.bit) & 1
-            ref.update_value(bool(bit_value))
-            return
+            return bool((register_value >> ref.bit) & 1)
 
         if ref.dtype in ("bool8", "bool16"):
             width = 8 if ref.dtype == "bool8" else 16
             word = decoder.decode_16bit_uint()
-            ref.update_value([bool((word >> i) & 1) for i in range(width)])
-            return
+            return [bool((word >> i) & 1) for i in range(width)]
 
         decode_methods = {
             "uint16": decoder.decode_16bit_uint,
@@ -248,11 +277,12 @@ class Poller:
         }
 
         if ref.dtype in decode_methods:
-            ref.update_value(decode_methods[ref.dtype]())
-        elif ref.dtype.startswith("string"):
-            ref.update_value(
+            return decode_methods[ref.dtype]()
+        if ref.dtype.startswith("string"):
+            return (
                 decoder.decode_string(ref.ref_width * 2).decode("utf-8").rstrip("\x00")
             )
+        raise ValueError(f"Unsupported dtype '{ref.dtype}' for register decode")
 
     def add_readable_reference(self, ref: "Reference"):
         if ref not in self.readableReferences:
@@ -675,12 +705,15 @@ class ModbusHandler:
         if dev is None:
             return
 
+        dev.setCount += 1
+        unknown_skips = 0
         writes = []
         for ref_name, value in ref_values.items():
             if ref_name not in dev.references:
                 self.logger.warning(
                     f"Unknown reference '{ref_name}' on device {device_name}, skipping"
                 )
+                unknown_skips += 1
                 continue
             writes.append((ref_name, value))
 
@@ -688,6 +721,8 @@ class ModbusHandler:
             self.logger.warning(
                 f"No known references in write payload for device={device_name}"
             )
+            dev.setUnknownRefs += unknown_skips
+            dev.setErrors += 1
             return
 
         ok_count = 0
@@ -697,8 +732,44 @@ class ModbusHandler:
             if i < len(writes) - 1:
                 delay_thread(interval)
 
+        dev.setUnknownRefs += unknown_skips
+        if unknown_skips or ok_count < len(writes):
+            dev.setErrors += 1
+        else:
+            dev.setSuccess += 1
+
         if ok_count:
             self.logger.info(f"Wrote {ok_count} value(s) for device={device_name}")
+
+    def read_references(self, device_name: str, ref_names: List[str]) -> dict:
+        dev = _find_device(self, device_name)
+        if dev is None:
+            return {}
+        if not ref_names:
+            self.logger.warning(f"Empty MQTT get payload for device={device_name}")
+            return {}
+
+        dev.getCount += 1
+        values, unknown_skips, read_failures = _read_references(self, dev, ref_names)
+        dev.getUnknownRefs += unknown_skips
+        dev.getReadErrors += read_failures
+        if unknown_skips or read_failures:
+            dev.getErrors += 1
+        else:
+            dev.getSuccess += 1
+        return values
+
+    def record_get_connect_failure(self, device_name: str) -> None:
+        dev = _find_device(self, device_name)
+        if dev is not None:
+            dev.getCount += 1
+            dev.getErrors += 1
+
+    def record_set_connect_failure(self, device_name: str) -> None:
+        dev = _find_device(self, device_name)
+        if dev is not None:
+            dev.setCount += 1
+            dev.setErrors += 1
 
     def print_results(self):
         for dev in self.deviceList:
@@ -732,13 +803,9 @@ class ModbusHandler:
             for ref in dev.references.values():
                 if ref.val is None:
                     continue
-                if isinstance(ref.val, float) and not math.isfinite(ref.val):
+                ref_val = format_mqtt_scalar(ref.val)
+                if ref_val is None:
                     continue
-                ref_val = (
-                    round(ref.val, FLOAT_TYPE_PRECISION)
-                    if isinstance(ref.val, float)
-                    else ref.val
-                )
                 key = _mqtt_payload_key(ref, self.mqtt_keys)
                 payload[key] = ref_val
 
@@ -777,6 +844,15 @@ class ModbusHandler:
                 "poll_count": dev.pollCount,
                 "error_count": dev.errorCount,
                 "last_poll_success": dev.pollSuccess,
+                "get_count": dev.getCount,
+                "get_errors": dev.getErrors,
+                "get_success": dev.getSuccess,
+                "get_unknown_refs": dev.getUnknownRefs,
+                "get_read_errors": dev.getReadErrors,
+                "set_count": dev.setCount,
+                "set_errors": dev.setErrors,
+                "set_success": dev.setSuccess,
+                "set_unknown_refs": dev.setUnknownRefs,
                 "config_source": self.config_file,
             }
             topic = self.mqtt_diagnostics_topic_pattern.replace(

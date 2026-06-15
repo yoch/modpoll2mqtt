@@ -11,6 +11,7 @@ from .modbus_task import (
     modbus_connect,
     modbus_close,
     publish_global_diagnostics,
+    format_mqtt_payload_values,
 )
 
 from . import __version__
@@ -33,6 +34,23 @@ def extract_device_from_mqtt_topic(pattern: str, topic: str):
     topic_regex = "([^/\n]*)".join(re.escape(p) for p in parts)
     match = re.fullmatch(topic_regex, topic)
     return match.group(1) if match else None
+
+
+def mqtt_get_response_topic(get_pattern: str, device_name: str) -> str:
+    return f"{get_pattern.replace('+', device_name)}/response"
+
+
+def classify_mqtt_command_topic(
+    set_pattern: str, get_pattern: str, topic: str
+) -> tuple[str | None, str | None]:
+    """Return (kind, device_name) where kind is 'set' or 'get', or (None, None)."""
+    device_name = extract_device_from_mqtt_topic(get_pattern, topic)
+    if device_name is not None:
+        return "get", device_name
+    device_name = extract_device_from_mqtt_topic(set_pattern, topic)
+    if device_name is not None:
+        return "set", device_name
+    return None, None
 
 
 def setup_logging(level, format):
@@ -72,6 +90,12 @@ def app(name="modpoll"):
                     f"name segment: {args.mqtt_subscribe_topic_pattern}"
                 )
                 exit(1)
+            if "+" not in args.mqtt_get_topic_pattern:
+                logger.error(
+                    "MQTT get topic pattern must contain '+' wildcard for the device "
+                    f"name segment: {args.mqtt_get_topic_pattern}"
+                )
+                exit(1)
             if args.mqtt_rx_queue_size < 1:
                 logger.error(
                     f"MQTT rx queue size must be at least 1: {args.mqtt_rx_queue_size}"
@@ -85,7 +109,10 @@ def app(name="modpoll"):
                 args.mqtt_pass,
                 args.mqtt_clientid,
                 args.mqtt_qos,
-                subscribe_topics=[args.mqtt_subscribe_topic_pattern],
+                subscribe_topics=[
+                    args.mqtt_subscribe_topic_pattern,
+                    args.mqtt_get_topic_pattern,
+                ],
                 use_tls=args.mqtt_use_tls,
                 tls_version=args.mqtt_tls_version,
                 cacerts=args.mqtt_cacerts,
@@ -187,12 +214,14 @@ def app(name="modpoll"):
             topic, payload = mqtt_handler.receive()
             if topic and payload:
                 try:
-                    device_name = extract_device_from_mqtt_topic(
-                        args.mqtt_subscribe_topic_pattern, topic
+                    kind, device_name = classify_mqtt_command_topic(
+                        args.mqtt_subscribe_topic_pattern,
+                        args.mqtt_get_topic_pattern,
+                        topic,
                     )
                 except ValueError:
                     logger.error(
-                        "MQTT subscribe pattern must contain '+' wildcard: "
+                        "MQTT topic pattern must contain '+' wildcard: "
                         f"{args.mqtt_subscribe_topic_pattern}"
                     )
                     continue
@@ -207,11 +236,13 @@ def app(name="modpoll"):
                     continue
 
                 if not isinstance(command, dict):
-                    logger.error("MQTT write payload must be a JSON object")
+                    logger.error("MQTT command payload must be a JSON object")
                     continue
 
                 if not command:
-                    logger.warning(f"Empty MQTT write payload for device={device_name}")
+                    logger.warning(
+                        f"Empty MQTT {kind} payload for device={device_name}"
+                    )
                     continue
 
                 device_found = False
@@ -219,15 +250,40 @@ def app(name="modpoll"):
                     if not modbus_handler.has_device(device_name):
                         continue
                     device_found = True
-                    if not modbus_connect(modbus_client):
-                        logger.error(
-                            f"Modbus connect failed for write: device={device_name}"
-                        )
+                    if kind == "set":
+                        if not modbus_connect(modbus_client):
+                            logger.error(
+                                f"Modbus connect failed for write: device={device_name}"
+                            )
+                            modbus_handler.record_set_connect_failure(device_name)
+                        else:
+                            try:
+                                modbus_handler.write_references(device_name, command)
+                            finally:
+                                modbus_close(modbus_client)
                     else:
-                        try:
-                            modbus_handler.write_references(device_name, command)
-                        finally:
-                            modbus_close(modbus_client)
+                        ref_names = list(command.keys())
+                        response_topic = mqtt_get_response_topic(
+                            args.mqtt_get_topic_pattern,
+                            device_name,
+                        )
+                        if not modbus_connect(modbus_client):
+                            logger.error(
+                                f"Modbus connect failed for get: device={device_name}"
+                            )
+                            modbus_handler.record_get_connect_failure(device_name)
+                            mqtt_handler.publish_data_message(response_topic, "{}")
+                        else:
+                            try:
+                                result = modbus_handler.read_references(
+                                    device_name, ref_names
+                                )
+                                mqtt_handler.publish_data_message(
+                                    response_topic,
+                                    json.dumps(format_mqtt_payload_values(result)),
+                                )
+                            finally:
+                                modbus_close(modbus_client)
                     break
 
                 if not device_found:

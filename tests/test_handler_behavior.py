@@ -245,6 +245,15 @@ def test_publish_diagnostics_uses_publish_not_data_message():
     assert payload["poll_count"] == 3
     assert payload["error_count"] == 0
     assert payload["last_poll_success"] is True
+    assert payload["get_count"] == 0
+    assert payload["get_errors"] == 0
+    assert payload["get_success"] == 0
+    assert payload["get_unknown_refs"] == 0
+    assert payload["get_read_errors"] == 0
+    assert payload["set_count"] == 0
+    assert payload["set_errors"] == 0
+    assert payload["set_success"] == 0
+    assert payload["set_unknown_refs"] == 0
     assert payload["config_source"] == "/path/to/meter.csv"
 
 

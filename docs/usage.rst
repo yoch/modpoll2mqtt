@@ -133,6 +133,15 @@ When ``--diagnostics-rate`` is greater than zero, ``modpoll`` periodically publi
     "poll_count": 42,
     "error_count": 3,
     "last_poll_success": true,
+    "get_count": 5,
+    "get_errors": 2,
+    "get_success": 3,
+    "get_unknown_refs": 1,
+    "get_read_errors": 4,
+    "set_count": 8,
+    "set_errors": 1,
+    "set_success": 7,
+    "set_unknown_refs": 2,
     "config_source": "/path/to/config.csv"
   }
 
@@ -191,8 +200,28 @@ Subscribe pattern (default): ``modpoll/+/set``. Publish to ``modpoll/{device}/se
 - ``bool8`` / ``bool16`` expect a JSON array of 8 or 16 booleans.
 - ``stringNNN`` references expect a string value.
 - Multiple references can be written in a single message.
+- Unknown reference keys are skipped with a warning; ``set_unknown_refs``, ``set_errors``, and ``set_success`` in device diagnostics track write attempts (see MQTT diagnostics).
 
 Duplicate reference names on the same device are rejected when loading the config file.
+
+MQTT on-demand read (get)
+-------------------------
+
+Subscribe pattern (default): ``modpoll/+/get``. Publish to ``modpoll/{device}/get`` with a JSON object whose keys are reference names (values are ignored, use ``null``):
+
+.. code-block:: json
+
+  {
+    "temp": null,
+    "pressure": null
+  }
+
+- On success, the response is published to ``modpoll/{device}/get/response`` with a JSON object of reference names to decoded values (same units as periodic MQTT publish). References that could not be read are omitted from the payload.
+- An empty payload ``{}`` on the request is ignored (warning logged, no response, no diagnostics). An empty response ``{}`` means the request was processed but no value could be read.
+- On partial failure, ``get_errors`` is incremented once per request (and ``get_success`` when there were no errors). ``get_unknown_refs`` and ``get_read_errors`` count individual skipped or failed references.
+- Multiple references in one request are read independently: known refs are returned even if others fail.
+- Reads use targeted Modbus requests (minimal register/coil count per reference), not a full poller block.
+- Uses the same connect/read/close pattern as MQTT writes (see ROADMAP B2 for a future persistent-connection optimization).
 
 **Breaking change (2.1.0+):** the ``ref``/``value`` object format is no longer supported; use a reference map instead.
 

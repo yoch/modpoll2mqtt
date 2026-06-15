@@ -132,6 +132,11 @@ def get_parser():
         help='Topic pattern for MQTT write commands. Use + as placeholder for device name. Defaults to "modpoll/+/set"',
     )
     parser.add_argument(
+        "--mqtt-get-topic-pattern",
+        default="modpoll/+/get",
+        help='Topic pattern for MQTT on-demand read commands. Use + as placeholder for device name. Defaults to "modpoll/+/get"',
+    )
+    parser.add_argument(
         "--mqtt-diagnostics-topic-pattern",
         default="modpoll/{{device_name}}/diagnostics",
         help="Topic pattern for MQTT diagnostics. Use {{device_name}} as placeholder for the device names in Modbus config. Defaults to modpoll/{{device_name}}/diagnostics",
