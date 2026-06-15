@@ -19,7 +19,7 @@ Publish to MQTT
 
 With successful polling and publishing, subscribe to ``modpoll/{device_name}/data`` on the same broker to view the data.
 
-Add ``--mqtt-retain`` so the broker keeps the last data message per topic for new subscribers (diagnostics are never retained). See :doc:`usage` for caveats.
+Add ``--mqtt-retain`` so the broker keeps the last data and diagnostics message per topic for new subscribers. The status topic ``modpoll/status`` is always retained. See :doc:`usage` for caveats.
 
 Write by reference
 ------------------

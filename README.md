@@ -70,7 +70,7 @@ modpoll \
 
 Data is published to `modpoll/<device_name>/data` by default.
 
-Add `--mqtt-retain` so the broker keeps the last data message per topic for new subscribers. Diagnostics topics are never retained. If a device goes offline, retained values may still appear live until the next successful publish.
+Add `--mqtt-retain` so the broker keeps the last data and diagnostics message per topic for new subscribers. The status topic `modpoll/status` is always retained. If a device goes offline, retained data values may still appear live until the next successful publish.
 
 ### MQTT write by reference
 

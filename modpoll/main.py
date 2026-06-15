@@ -6,7 +6,12 @@ import sys
 
 from .arg_parser import get_parser
 from .mqtt_task import MqttHandler
-from .modbus_task import setup_modbus_handlers, modbus_connect, modbus_close
+from .modbus_task import (
+    setup_modbus_handlers,
+    modbus_connect,
+    modbus_close,
+    publish_global_diagnostics,
+)
 
 from . import __version__
 from .utils import set_threading_event, delay_thread, on_threading_event, get_utc_time
@@ -126,6 +131,8 @@ def app(name="modpoll"):
     # main loop
     last_check = 0
     last_diag = 0
+    last_modbus_ok = False
+    last_cycle_s = 0.0
     while not on_threading_event():
         now = get_utc_time()
         # routine check
@@ -134,10 +141,13 @@ def app(name="modpoll"):
                 elapsed = args.rate
             else:
                 elapsed = round(now - last_check, 6)
+            last_cycle_s = elapsed
             logger.info(
                 f" === Modpoll is polling at rate:{args.rate}s, actual:{elapsed}s ==="
             )
-            if not modbus_connect(modbus_client):
+            modbus_ok = modbus_connect(modbus_client)
+            last_modbus_ok = modbus_ok
+            if not modbus_ok:
                 for modbus_handler in modbus_handlers:
                     modbus_handler.on_connect_failure()
             else:
@@ -166,6 +176,10 @@ def app(name="modpoll"):
             last_diag = now
             for modbus_handler in modbus_handlers:
                 modbus_handler.publish_diagnostics()
+            if mqtt_handler:
+                publish_global_diagnostics(
+                    mqtt_handler, modbus_handlers, last_modbus_ok, last_cycle_s
+                )
         if on_threading_event():
             break
         # Check if receive mqtt request

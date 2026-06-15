@@ -1,3 +1,4 @@
+import json
 import logging
 import queue
 import socket
@@ -17,6 +18,7 @@ from paho.mqtt import MQTTException
 from .utils import delay_thread, on_threading_event
 
 _MQTT_CONNECT_TIMEOUT = 10.0
+_MQTT_STATUS_TOPIC = "modpoll/status"
 
 
 class MqttHandler:
@@ -227,6 +229,12 @@ class MqttHandler:
             if self.mqtt_version == "5.0":
                 connect_kwargs["clean_start"] = self.clean_start_or_session
 
+            self.mqtt_client.will_set(
+                _MQTT_STATUS_TOPIC,
+                json.dumps({"online": False}),
+                qos=self.qos,
+                retain=True,
+            )
             self.mqtt_client.connect_async(**connect_kwargs)
             self.mqtt_client.loop_start()
         except (OSError, MQTTException, TypeError, ValueError) as ex:
@@ -238,6 +246,7 @@ class MqttHandler:
         while time.monotonic() < deadline:
             if self._connected_event.is_set():
                 if self._connect_rc == 0 and self.mqtt_client.is_connected():
+                    self.publish_status(True)
                     return True
                 self._stop_mqtt_loop()
                 return False
@@ -250,6 +259,14 @@ class MqttHandler:
         self.logger.error("MQTT connect timeout waiting for CONNACK.")
         self._stop_mqtt_loop()
         return False
+
+    def publish_status(self, online: bool) -> Optional[MQTTMessageInfo]:
+        return self.publish(
+            _MQTT_STATUS_TOPIC,
+            json.dumps({"online": online}),
+            qos=self.qos,
+            retain=True,
+        )
 
     def publish_data_message(self, topic: str, msg: str) -> Optional[MQTTMessageInfo]:
         return self.publish(topic, msg, qos=self.qos, retain=self.retain_data_publishes)
@@ -301,6 +318,8 @@ class MqttHandler:
             return
         self._closed = True
         if self.mqtt_client:
+            if self.mqtt_client.is_connected():
+                self.publish_status(False)
             self._stop_mqtt_loop()
         else:
             self.logger.warning("MQTT client not initialized, nothing to close.")

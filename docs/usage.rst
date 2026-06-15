@@ -96,7 +96,7 @@ Framers and transports
 MQTT retain
 -----------
 
-By default, published data messages are **not** retained by the broker. Use ``--mqtt-retain`` to set the MQTT retain flag on data publishes (``publish_data`` only; diagnostics are never retained).
+By default, published data and diagnostics messages are **not** retained by the broker. Use ``--mqtt-retain`` to set the MQTT retain flag on data and diagnostics publishes (``publish_data`` and ``--diagnostics-rate`` topics). The status topic ``modpoll/status`` is always retained independently of ``--mqtt-retain``.
 
 This is useful when subscribers (dashboards, automations) connect after ``modpoll`` has already started: they receive the last known values immediately instead of waiting for the next poll cycle.
 
@@ -107,7 +107,47 @@ This is useful when subscribers (dashboards, automations) connect after ``modpol
 **Caveats:**
 
 - If a Modbus device becomes unreachable, ``modpoll`` stops publishing for that device but the broker may still serve the last retained message, which can look like a live value.
-- Retain is not a last-will/offline signal; it only stores the last successful publish per topic.
+- Retain is not a last-will/offline signal for data or diagnostics; use ``modpoll/status`` for process presence (see below).
+
+MQTT status
+-----------
+
+When ``--mqtt-host`` is set, ``modpoll`` publishes process presence on ``modpoll/status``:
+
+.. code-block:: json
+
+  {"online": true}
+
+On a clean shutdown, ``online`` is set to ``false`` before disconnecting. On an unexpected disconnect (crash, network loss), the broker publishes a last-will message with ``{"online": false}``. Status messages are **always** retained.
+
+MQTT diagnostics
+----------------
+
+When ``--diagnostics-rate`` is greater than zero, ``modpoll`` periodically publishes diagnostics.
+
+**Per device** (``--mqtt-diagnostics-topic-pattern``, default ``modpoll/{device}/diagnostics``):
+
+.. code-block:: json
+
+  {
+    "poll_count": 42,
+    "error_count": 3,
+    "last_poll_success": true,
+    "config_source": "/path/to/config.csv"
+  }
+
+**Process-wide** (``modpoll/diagnostics``):
+
+.. code-block:: json
+
+  {
+    "mqtt_connected": true,
+    "modbus_ok": true,
+    "devices_failing": 1,
+    "last_cycle_s": 10.1
+  }
+
+Diagnostics retain follows ``--mqtt-retain`` (same as data topics). Diagnostics report operational health; they are not a substitute for ``modpoll/status`` presence. ``last_cycle_s`` is ``0`` until the first poll cycle completes.
 
 MQTT payload keys
 -----------------
@@ -122,11 +162,6 @@ MQTT single publish
 -------------------
 
 By default, all references for a device are published in one JSON object on the data topic. With ``--mqtt-single``, each reference is published on its own topic under the publish pattern, e.g. ``modpoll/{device}/data/{ref_name}``. List values (``bool8`` / ``bool16``) are split into indexed sub-topics (``.../{ref_name}/0``, ``.../1``, …).
-
-MQTT diagnostics
-----------------
-
-When ``--diagnostics-rate`` is greater than zero, ``modpoll`` periodically publishes diagnostics to ``--mqtt-diagnostics-topic-pattern`` (default ``modpoll/{device}/diagnostics``). The JSON payload contains ``poll_count``, ``error_count``, and ``last_poll_success``. Diagnostics messages are never retained.
 
 Publish behavior
 ----------------

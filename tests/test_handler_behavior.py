@@ -228,9 +228,10 @@ def test_publish_diagnostics_uses_publish_not_data_message():
     device.errorCount = 0
 
     mqtt = MagicMock()
+    mqtt.retain_data_publishes = False
     handler = ModbusHandler(
         MagicMock(),
-        "dummy.csv",
+        "/path/to/meter.csv",
         mqtt_handler=mqtt,
         mqtt_diagnostics_topic_pattern="t/{{device_name}}/diag",
     )
@@ -239,7 +240,29 @@ def test_publish_diagnostics_uses_publish_not_data_message():
 
     mqtt.publish.assert_called_once()
     mqtt.publish_data_message.assert_not_called()
-    assert mqtt.publish.call_args.kwargs.get("retain", False) is False
+    assert mqtt.publish.call_args.kwargs.get("retain") is False
+    payload = json.loads(mqtt.publish.call_args[0][1])
+    assert payload["poll_count"] == 3
+    assert payload["error_count"] == 0
+    assert payload["last_poll_success"] is True
+    assert payload["config_source"] == "/path/to/meter.csv"
+
+
+def test_publish_diagnostics_uses_mqtt_retain_when_enabled():
+    device = _device_with_temp_ref()
+
+    mqtt = MagicMock()
+    mqtt.retain_data_publishes = True
+    handler = ModbusHandler(
+        MagicMock(),
+        "config.csv",
+        mqtt_handler=mqtt,
+        mqtt_diagnostics_topic_pattern="t/{{device_name}}/diag",
+    )
+    handler.deviceList = [device]
+    handler.publish_diagnostics()
+
+    assert mqtt.publish.call_args.kwargs.get("retain") is True
 
 
 def test_publish_data_omits_null_reference_values():

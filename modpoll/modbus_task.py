@@ -17,6 +17,7 @@ from .mqtt_task import MqttHandler
 
 FLOAT_TYPE_PRECISION = 3
 MODBUS_WRITE_INTERVAL = 0.1
+MQTT_GLOBAL_DIAGNOSTICS_TOPIC = "modpoll/diagnostics"
 _MODBUS_BACKOFF_BASE = 1.0
 _MODBUS_BACKOFF_MAX = 60.0
 _modbus_connect_failures = 0
@@ -770,16 +771,18 @@ class ModbusHandler:
             return
         if not self.mqtt_diagnostics_topic_pattern:
             return
+        retain = self.mqtt_handler.retain_data_publishes
         for dev in self.deviceList:
             payload = {
                 "poll_count": dev.pollCount,
                 "error_count": dev.errorCount,
                 "last_poll_success": dev.pollSuccess,
+                "config_source": self.config_file,
             }
             topic = self.mqtt_diagnostics_topic_pattern.replace(
                 "{{device_name}}", dev.name
             )
-            self.mqtt_handler.publish(topic, json.dumps(payload))
+            self.mqtt_handler.publish(topic, json.dumps(payload), retain=retain)
 
     def export(self, file, timestamp=None):
         data = {}
@@ -800,6 +803,34 @@ class ModbusHandler:
 
     def get_device_list(self) -> List[Device]:
         return self.deviceList
+
+
+def count_devices_failing(modbus_handlers: List[ModbusHandler]) -> int:
+    return sum(
+        1
+        for handler in modbus_handlers
+        for dev in handler.deviceList
+        if not dev.pollSuccess
+    )
+
+
+def publish_global_diagnostics(
+    mqtt_handler: MqttHandler,
+    modbus_handlers: List[ModbusHandler],
+    modbus_ok: bool,
+    last_cycle_s: float,
+) -> None:
+    payload = {
+        "mqtt_connected": mqtt_handler.is_connected(),
+        "modbus_ok": modbus_ok,
+        "devices_failing": count_devices_failing(modbus_handlers),
+        "last_cycle_s": last_cycle_s,
+    }
+    mqtt_handler.publish(
+        MQTT_GLOBAL_DIAGNOSTICS_TOPIC,
+        json.dumps(payload),
+        retain=mqtt_handler.retain_data_publishes,
+    )
 
 
 def modbus_connect(client) -> bool:

@@ -4,6 +4,23 @@ Changelog
 [Unreleased]
 ------------
 
+Features
+~~~~~~~~
+
+-  enrich MQTT diagnostics with ``config_source`` per device and global
+   ``modpoll/diagnostics`` process health payload
+-  publish process presence on ``modpoll/status`` with last-will
+   (``online: false``) and birth message (``online: true``); status is
+   always retained
+-  apply ``--mqtt-retain`` to diagnostics topics (same policy as data
+   publishes)
+
+Documentation
+~~~~~~~~~~~~~
+
+-  document MQTT status, global diagnostics, and updated retain behavior
+   in ``docs/usage.rst``
+
 `2.1.2 <https://github.com/yoch/modpoll2mqtt/compare/v2.1.1...v2.1.2>`__ (2026-06-15)
 -------------------------------------------------------------------------------------
 
