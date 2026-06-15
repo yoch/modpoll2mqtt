@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "modpoll2mqtt"
-version = "2.1.1"
+version = "2.1.2"
 description = "Modbus to MQTT gateway — fork of modpoll"
 authors = ["yoch <yoch.melka@gmail.com>"]
 repository = "https://github.com/yoch/modpoll2mqtt"

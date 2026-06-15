@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [2.1.2](https://github.com/yoch/modpoll2mqtt/compare/v2.1.1...v2.1.2) (2026-06-15)
+
 ### Features
 
 * warn at config load when a reference is marked `w`/`rw` on a `discrete_input` or `input_register` poller (Modbus inputs are read-only)

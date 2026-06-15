@@ -29,16 +29,12 @@ class FakeModbusMaster:
     def read_holding_registers(self, address, *, count=1, device_id=1):
         if address in self.fail_addresses:
             return FakeModbusResult(error=True)
-        return FakeModbusResult(
-            registers=self.registers[address : address + count]
-        )
+        return FakeModbusResult(registers=self.registers[address : address + count])
 
     def read_input_registers(self, address, *, count=1, device_id=1):
         if address in self.fail_addresses:
             return FakeModbusResult(error=True)
-        return FakeModbusResult(
-            registers=self.registers[address : address + count]
-        )
+        return FakeModbusResult(registers=self.registers[address : address + count])
 
     def write_coil(self, address, value, device_id=1):
         self.writes.append(("coil", address, value))
