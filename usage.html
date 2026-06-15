@@ -1,21 +1,21 @@
+
+
 <!DOCTYPE html>
-<html class="writer-html5" lang="en" >
+<html class="writer-html5" lang="en" data-content_root="./">
 <head>
-  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Basic Usage &mdash; modpoll2mqtt 2.1.1 documentation</title>
-      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
-      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
-  <!--[if lt IE 9]>
-    <script src="_static/js/html5shiv.min.js"></script>
-  <![endif]-->
+  <title>Basic Usage &mdash; modpoll2mqtt 2.1.2 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
   
-        <script src="_static/jquery.js?v=5d32c60e"></script>
-        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="_static/documentation_options.js?v=841abef3"></script>
-        <script src="_static/doctools.js?v=9a2dae69"></script>
-        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=b3e23499"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -34,9 +34,6 @@
           <a href="index.html" class="icon icon-home">
             modpoll2mqtt
           </a>
-              <div class="version">
-                2.1.1
-              </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
     <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
@@ -50,8 +47,11 @@
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Basic Usage</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#Named Arguments">Named Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#modpoll.arg_parser-get_parser-named-arguments">Named Arguments</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#commandline-usage">Commandline Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#configuration-sources">Configuration sources</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#export">Export</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#operational-flags">Operational flags</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#configuration-file">Configuration File</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#coil-and-discrete-input-references">Coil and discrete input references</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#register-bit-references">Register bit references</a></li>
@@ -60,6 +60,9 @@
 <li class="toctree-l2"><a class="reference internal" href="#framers-and-transports">Framers and transports</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#mqtt-retain">MQTT retain</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#mqtt-payload-keys">MQTT payload keys</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mqtt-single-publish">MQTT single publish</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mqtt-diagnostics">MQTT diagnostics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#publish-behavior">Publish behavior</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#mqtt-write-commands">MQTT write commands</a></li>
 </ul>
 </li>
@@ -93,7 +96,7 @@
              
   <section id="basic-usage">
 <h1>Basic Usage<a class="headerlink" href="#basic-usage" title="Link to this heading"></a></h1>
-<p><p>modpoll2mqtt v2.1.1 - Modbus to MQTT gateway</p>
+<p><p>modpoll2mqtt v2.1.2 - Modbus to MQTT gateway</p>
 </p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">usage</span><span class="p">:</span> <span class="n">modpoll</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">v</span><span class="p">]</span> <span class="o">-</span><span class="n">f</span> <span class="n">CONFIG</span> <span class="p">[</span><span class="n">CONFIG</span> <span class="o">...</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">csv</span><span class="o">-</span><span class="n">delimiter</span> <span class="p">{</span><span class="n">comma</span><span class="p">,</span><span class="n">tab</span><span class="p">}]</span>
                <span class="p">[</span><span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">output</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">r</span> <span class="n">RATE</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">interval</span> <span class="n">INTERVAL</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">tcp</span> <span class="n">TCP</span><span class="p">]</span>
@@ -117,8 +120,8 @@
                <span class="p">[</span><span class="o">--</span><span class="n">delay</span> <span class="n">DELAY</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">framer</span> <span class="p">{</span><span class="n">default</span><span class="p">,</span><span class="n">ascii</span><span class="p">,</span><span class="n">rtu</span><span class="p">,</span><span class="n">socket</span><span class="p">}]</span>
 </pre></div>
 </div>
-<section id="Named Arguments">
-<h2>Named Arguments<a class="headerlink" href="#Named Arguments" title="Link to this heading"></a></h2>
+<section id="modpoll.arg_parser-get_parser-named-arguments">
+<h2>Named Arguments<a class="headerlink" href="#modpoll.arg_parser-get_parser-named-arguments" title="Link to this heading"></a></h2>
 <dl class="option-list">
 <dt><kbd>-v, --version</kbd></dt>
 <dd><p>show program’s version number and exit</p>
@@ -129,53 +132,53 @@
 <dt><kbd>--csv-delimiter</kbd></dt>
 <dd><p>Possible choices: comma, tab</p>
 <p>Column delimiter code for Modbus config files (comma, tab). Defaults to comma</p>
-<p>Default: “comma”</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'comma'</span></code></p>
 </dd>
 <dt><kbd>--no-output</kbd></dt>
 <dd><p>Do not print poll results to stdout (useful under systemd)</p>
-<p>Default: False</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
 </dd>
 <dt><kbd>-r, --rate</kbd></dt>
 <dd><p>The sampling rate (s) to poll modbus device, Defaults to 10.0</p>
-<p>Default: 10.0</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">10.0</span></code></p>
 </dd>
 <dt><kbd>-1, --once</kbd></dt>
 <dd><p>Only run polling at one time</p>
-<p>Default: False</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
 </dd>
 <dt><kbd>--interval</kbd></dt>
 <dd><p>The time interval in seconds between two polling, Defaults to 0.5</p>
-<p>Default: 0.5</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">0.5</span></code></p>
 </dd>
 <dt><kbd>--tcp</kbd></dt>
 <dd><p>Act as a Modbus TCP master, connecting to host TCP</p>
 </dd>
 <dt><kbd>--tcp-port</kbd></dt>
 <dd><p>Port for MODBUS TCP. Defaults to 502</p>
-<p>Default: 502</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">502</span></code></p>
 </dd>
 <dt><kbd>--udp</kbd></dt>
 <dd><p>Act as a Modbus UDP master, connecting to host UDP</p>
 </dd>
 <dt><kbd>--udp-port</kbd></dt>
 <dd><p>Port for MODBUS UDP. Defaults to 502</p>
-<p>Default: 502</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">502</span></code></p>
 </dd>
 <dt><kbd>--serial, --rtu</kbd></dt>
 <dd><p>pyserial URL (or port name) for serial transport (alias: –rtu)</p>
 </dd>
 <dt><kbd>--serial-baud, --rtu-baud</kbd></dt>
 <dd><p>Baud rate for serial port. Defaults to 9600</p>
-<p>Default: 9600</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">9600</span></code></p>
 </dd>
 <dt><kbd>--serial-parity, --rtu-parity</kbd></dt>
 <dd><p>Possible choices: none, odd, even</p>
 <p>Parity for serial port. Defaults to none</p>
-<p>Default: “none”</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'none'</span></code></p>
 </dd>
 <dt><kbd>--timeout</kbd></dt>
 <dd><p>Response time-out seconds for MODBUS devices, Defaults to 3.0</p>
-<p>Default: 3.0</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">3.0</span></code></p>
 </dd>
 <dt><kbd>-o, --export</kbd></dt>
 <dd><p>The file name to export references/registers</p>
@@ -183,38 +186,38 @@
 <dt><kbd>--mqtt-version</kbd></dt>
 <dd><p>Possible choices: 3.1.1, 5.0</p>
 <p>MQTT version. Defaults to MQTT v3.1.1</p>
-<p>Default: “3.1.1”</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'3.1.1'</span></code></p>
 </dd>
 <dt><kbd>--mqtt-host</kbd></dt>
 <dd><p>MQTT server address. Skip MQTT setup if not specified</p>
 </dd>
 <dt><kbd>--mqtt-port</kbd></dt>
 <dd><p>1883 for non-TLS or 8883 for TLS, Defaults to 1883</p>
-<p>Default: 1883</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">1883</span></code></p>
 </dd>
 <dt><kbd>--mqtt-clientid</kbd></dt>
 <dd><p>MQTT client name, If qos &gt; 0, set unique name for multiple clients</p>
 </dd>
 <dt><kbd>--mqtt-publish-topic-pattern</kbd></dt>
 <dd><p>Topic pattern for MQTT publish. Use {{device_name}} as placeholder for the device names in Modbus config. Defaults to “modpoll/{{device_name}}/data”</p>
-<p>Default: “modpoll/{{device_name}}/data”</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'modpoll/{{device_name}}/data'</span></code></p>
 </dd>
 <dt><kbd>--mqtt-subscribe-topic-pattern</kbd></dt>
 <dd><p>Topic pattern for MQTT write commands. Use + as placeholder for device name. Defaults to “modpoll/+/set”</p>
-<p>Default: “modpoll/+/set”</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'modpoll/+/set'</span></code></p>
 </dd>
 <dt><kbd>--mqtt-diagnostics-topic-pattern</kbd></dt>
 <dd><p>Topic pattern for MQTT diagnostics. Use {{device_name}} as placeholder for the device names in Modbus config. Defaults to modpoll/{{device_name}}/diagnostics</p>
-<p>Default: “modpoll/{{device_name}}/diagnostics”</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'modpoll/{{device_name}}/diagnostics'</span></code></p>
 </dd>
 <dt><kbd>--mqtt-qos</kbd></dt>
 <dd><p>Possible choices: 0, 1, 2</p>
 <p>MQTT QoS value. Defaults to 0</p>
-<p>Default: 0</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">0</span></code></p>
 </dd>
 <dt><kbd>--mqtt-rx-queue-size</kbd></dt>
 <dd><p>Max MQTT subscribe messages buffered between polls (default: 1000)</p>
-<p>Default: 1000</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">1000</span></code></p>
 </dd>
 <dt><kbd>--mqtt-user</kbd></dt>
 <dd><p>Username for authentication (optional)</p>
@@ -224,11 +227,11 @@
 </dd>
 <dt><kbd>--mqtt-use-tls</kbd></dt>
 <dd><p>Use TLS</p>
-<p>Default: False</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
 </dd>
 <dt><kbd>--mqtt-insecure</kbd></dt>
 <dd><p>Use TLS without providing certificates</p>
-<p>Default: False</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
 </dd>
 <dt><kbd>--mqtt-cacerts</kbd></dt>
 <dd><p>Path to ca keychain</p>
@@ -236,46 +239,46 @@
 <dt><kbd>--mqtt-tls-version</kbd></dt>
 <dd><p>Possible choices: tlsv1.2, tlsv1.1, tlsv1</p>
 <p>TLS protocol version, can be one of tlsv1.2 tlsv1.1 or tlsv1</p>
-<p>Default: “tlsv1.2”</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'tlsv1.2'</span></code></p>
 </dd>
 <dt><kbd>--mqtt-single</kbd></dt>
 <dd><p>Publish each value in a single topic. If not specified, groups all values in one topic.</p>
-<p>Default: False</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
 </dd>
 <dt><kbd>--mqtt-keys</kbd></dt>
 <dd><p>Possible choices: name-with-unit, name-only</p>
-<p>MQTT JSON payload key format. “name-with-unit” appends “<a href="#id1"><span class="problematic" id="id2">|</span></a>unit” when configured (default). “name-only” uses reference names only.</p>
-<p>Default: “name-with-unit”</p>
+<p>MQTT JSON payload key format. “name-with-unit” appends the unit suffix when configured (default). “name-only” uses reference names only.</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'name-with-unit'</span></code></p>
 </dd>
 <dt><kbd>--mqtt-retain</kbd></dt>
 <dd><p>Set the MQTT retain flag on published data messages.</p>
-<p>Default: False</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
 </dd>
 <dt><kbd>--diagnostics-rate</kbd></dt>
 <dd><p>Time in seconds as publishing period for each device diagnostics</p>
-<p>Default: 0</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">0</span></code></p>
 </dd>
 <dt><kbd>--autoremove</kbd></dt>
 <dd><p>Automatically remove poller if modbus communication has failed 3 times.</p>
-<p>Default: False</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
 </dd>
 <dt><kbd>--loglevel</kbd></dt>
 <dd><p>Possible choices: DEBUG, INFO, WARNING, ERROR, CRITICAL</p>
 <p>Set log level, Defaults to INFO</p>
-<p>Default: “INFO”</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'INFO'</span></code></p>
 </dd>
 <dt><kbd>--timestamp</kbd></dt>
 <dd><p>Add timestamp to the result</p>
-<p>Default: False</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
 </dd>
 <dt><kbd>--delay</kbd></dt>
 <dd><p>Time to delay sending first request in seconds after connecting. Default to 0</p>
-<p>Default: 0</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">0</span></code></p>
 </dd>
 <dt><kbd>--framer</kbd></dt>
 <dd><p>Possible choices: default, ascii, rtu, socket</p>
 <p>The type of framer for Modbus messages. Serial supports ascii/rtu; TCP/UDP use socket.</p>
-<p>Default: “default”</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'default'</span></code></p>
 </dd>
 </dl>
 </section>
@@ -303,6 +306,30 @@
 </pre></div>
 </div>
 </li>
+<li><p>Connect to Modbus UDP device</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>modpoll<span class="w"> </span>--udp<span class="w"> </span><span class="m">192</span>.168.1.10<span class="w"> </span>--config<span class="w"> </span>examples/modsim.csv
+</pre></div>
+</div>
+</li>
+</ul>
+</section>
+<section id="configuration-sources">
+<h2>Configuration sources<a class="headerlink" href="#configuration-sources" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">--config</span></code> accepts one or more local file paths or HTTP(S) URLs. Multiple files are loaded into separate logical configs that share the same Modbus connection.</p>
+<p>If columns are not split correctly (for example tab-separated files), use <code class="docutils literal notranslate"><span class="pre">--csv-delimiter</span> <span class="pre">tab</span></code> (default: <code class="docutils literal notranslate"><span class="pre">comma</span></code>).</p>
+</section>
+<section id="export">
+<h2>Export<a class="headerlink" href="#export" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">--export</span></code> writes polled reference values to a JSON file keyed by device name, then by reference name. Use <code class="docutils literal notranslate"><span class="pre">--timestamp</span></code> to add a <code class="docutils literal notranslate"><span class="pre">timestamp</span></code> field to each device’s export object and to grouped MQTT publish payloads.</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>modpoll<span class="w"> </span>--tcp<span class="w"> </span><span class="m">192</span>.168.1.10<span class="w"> </span>--config<span class="w"> </span>examples/modsim.csv<span class="w"> </span>--export<span class="w"> </span>data.json<span class="w"> </span>--timestamp
+</pre></div>
+</div>
+</section>
+<section id="operational-flags">
+<h2>Operational flags<a class="headerlink" href="#operational-flags" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--no-output</span></code> suppresses poll result tables on stdout (replaces the former <code class="docutils literal notranslate"><span class="pre">--daemon</span></code> / <code class="docutils literal notranslate"><span class="pre">-d</span></code> flag; does not fork).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--delay</span></code> waits N seconds after connecting before the first Modbus poll.</p></li>
 </ul>
 </section>
 <section id="configuration-file">
@@ -349,14 +376,30 @@
 </section>
 <section id="mqtt-payload-keys">
 <h2>MQTT payload keys<a class="headerlink" href="#mqtt-payload-keys" title="Link to this heading"></a></h2>
-<p>By default, grouped MQTT publish payloads use reference names as JSON keys, appending <code class="docutils literal notranslate"><span class="pre">|unit</span></code> when a unit is configured in the CSV (e.g. <code class="docutils literal notranslate"><span class="pre">&quot;temp|°C&quot;</span></code>). Use <code class="docutils literal notranslate"><span class="pre">--mqtt-keys</span> <span class="pre">name-only</span></code> to publish keys without the unit suffix:</p>
+<p>By default, grouped MQTT publish payloads use reference names as JSON keys, appending <code class="docutils literal notranslate"><span class="pre">\|unit</span></code> when a unit is configured in the CSV (e.g. <code class="docutils literal notranslate"><span class="pre">&quot;temp\|°C&quot;</span></code>). Use <code class="docutils literal notranslate"><span class="pre">--mqtt-keys</span> <span class="pre">name-only</span></code> to publish keys without the unit suffix:</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>modpoll<span class="w"> </span>--tcp<span class="w"> </span><span class="m">192</span>.168.1.10<span class="w"> </span>--mqtt-host<span class="w"> </span>localhost<span class="w"> </span>--mqtt-keys<span class="w"> </span>name-only<span class="w"> </span>--config<span class="w"> </span>examples/modsim.csv
 </pre></div>
 </div>
 </section>
+<section id="mqtt-single-publish">
+<h2>MQTT single publish<a class="headerlink" href="#mqtt-single-publish" title="Link to this heading"></a></h2>
+<p>By default, all references for a device are published in one JSON object on the data topic. With <code class="docutils literal notranslate"><span class="pre">--mqtt-single</span></code>, each reference is published on its own topic under the publish pattern, e.g. <code class="docutils literal notranslate"><span class="pre">modpoll/{device}/data/{ref_name}</span></code>. List values (<code class="docutils literal notranslate"><span class="pre">bool8</span></code> / <code class="docutils literal notranslate"><span class="pre">bool16</span></code>) are split into indexed sub-topics (<code class="docutils literal notranslate"><span class="pre">.../{ref_name}/0</span></code>, <code class="docutils literal notranslate"><span class="pre">.../1</span></code>, …).</p>
+</section>
+<section id="mqtt-diagnostics">
+<h2>MQTT diagnostics<a class="headerlink" href="#mqtt-diagnostics" title="Link to this heading"></a></h2>
+<p>When <code class="docutils literal notranslate"><span class="pre">--diagnostics-rate</span></code> is greater than zero, <code class="docutils literal notranslate"><span class="pre">modpoll</span></code> periodically publishes diagnostics to <code class="docutils literal notranslate"><span class="pre">--mqtt-diagnostics-topic-pattern</span></code> (default <code class="docutils literal notranslate"><span class="pre">modpoll/{device}/diagnostics</span></code>). The JSON payload contains <code class="docutils literal notranslate"><span class="pre">poll_count</span></code>, <code class="docutils literal notranslate"><span class="pre">error_count</span></code>, and <code class="docutils literal notranslate"><span class="pre">last_poll_success</span></code>. Diagnostics messages are never retained.</p>
+</section>
+<section id="publish-behavior">
+<h2>Publish behavior<a class="headerlink" href="#publish-behavior" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Data is not published for a device unless its latest poll cycle succeeded (<code class="docutils literal notranslate"><span class="pre">last_poll_success</span></code> in diagnostics).</p></li>
+<li><p>References with no value (<code class="docutils literal notranslate"><span class="pre">null</span></code>) are omitted from grouped MQTT payloads.</p></li>
+<li><p>Non-finite floats (<code class="docutils literal notranslate"><span class="pre">NaN</span></code>, <code class="docutils literal notranslate"><span class="pre">Inf</span></code>) are omitted from MQTT publish and export.</p></li>
+</ul>
+</section>
 <section id="mqtt-write-commands">
 <h2>MQTT write commands<a class="headerlink" href="#mqtt-write-commands" title="Link to this heading"></a></h2>
-<p>Subscribe pattern (default): <code class="docutils literal notranslate"><span class="pre">modpoll/+/set</span></code>. Publish to <code class="docutils literal notranslate"><span class="pre">modpoll/&lt;device&gt;/set</span></code> with a JSON object mapping reference names to values:</p>
+<p>Subscribe pattern (default): <code class="docutils literal notranslate"><span class="pre">modpoll/+/set</span></code>. Publish to <code class="docutils literal notranslate"><span class="pre">modpoll/{device}/set</span></code> with a JSON object mapping reference names to values:</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
 <span class="w">  </span><span class="nt">&quot;PID_V3V_EC_Consigne_reprise&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">21.5</span><span class="p">,</span>
 <span class="w">  </span><span class="nt">&quot;BP_MA_CTA&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
@@ -368,6 +411,10 @@
 <li><p>Reference names in the payload must match the CSV configuration; unknown keys are skipped with a warning.</p></li>
 <li><p>Values use the same decoded engineering units as MQTT publish (scale and dtype from the CSV are handled by modpoll).</p></li>
 <li><p>Only references marked <code class="docutils literal notranslate"><span class="pre">rw</span></code> or <code class="docutils literal notranslate"><span class="pre">w</span></code> in the CSV can be written.</p></li>
+<li><p>Only <code class="docutils literal notranslate"><span class="pre">coil</span></code> and <code class="docutils literal notranslate"><span class="pre">holding_register</span></code> pollers are writable; <code class="docutils literal notranslate"><span class="pre">discrete_input</span></code> and <code class="docutils literal notranslate"><span class="pre">input_register</span></code> are read-only at the Modbus protocol level even when marked <code class="docutils literal notranslate"><span class="pre">rw</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">bool</span></code> on coils or registers (including <code class="docutils literal notranslate"><span class="pre">address:bit</span></code>) expects a scalar boolean.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">bool8</span></code> / <code class="docutils literal notranslate"><span class="pre">bool16</span></code> expect a JSON array of 8 or 16 booleans.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">stringNNN</span></code> references expect a string value.</p></li>
 <li><p>Multiple references can be written in a single message.</p></li>
 </ul>
 <p>Duplicate reference names on the same device are rejected when loading the config file.</p>

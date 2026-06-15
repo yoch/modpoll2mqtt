@@ -1,21 +1,21 @@
+
+
 <!DOCTYPE html>
-<html class="writer-html5" lang="en" >
+<html class="writer-html5" lang="en" data-content_root="./">
 <head>
-  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Quickstart &mdash; modpoll2mqtt 2.1.1 documentation</title>
-      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
-      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
-  <!--[if lt IE 9]>
-    <script src="_static/js/html5shiv.min.js"></script>
-  <![endif]-->
+  <title>Quickstart &mdash; modpoll2mqtt 2.1.2 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
   
-        <script src="_static/jquery.js?v=5d32c60e"></script>
-        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="_static/documentation_options.js?v=841abef3"></script>
-        <script src="_static/doctools.js?v=9a2dae69"></script>
-        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=b3e23499"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -34,9 +34,6 @@
           <a href="index.html" class="icon icon-home">
             modpoll2mqtt
           </a>
-              <div class="version">
-                2.1.1
-              </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
     <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
@@ -97,18 +94,18 @@
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>modpoll<span class="w"> </span>--tcp<span class="w"> </span><span class="m">192</span>.168.1.10<span class="w"> </span>--mqtt-host<span class="w"> </span>broker.emqx.io<span class="w"> </span>--config<span class="w"> </span>examples/modsim.csv
 </pre></div>
 </div>
-<p>With successful polling and publishing, subscribe to <code class="docutils literal notranslate"><span class="pre">modpoll/&lt;device_name&gt;/data</span></code> on the same broker to view the data.</p>
+<p>With successful polling and publishing, subscribe to <code class="docutils literal notranslate"><span class="pre">modpoll/{device_name}/data</span></code> on the same broker to view the data.</p>
 <p>Add <code class="docutils literal notranslate"><span class="pre">--mqtt-retain</span></code> so the broker keeps the last data message per topic for new subscribers (diagnostics are never retained). See <a class="reference internal" href="usage.html"><span class="doc">Basic Usage</span></a> for caveats.</p>
 </section>
 <section id="write-by-reference">
 <h2>Write by reference<a class="headerlink" href="#write-by-reference" title="Link to this heading"></a></h2>
-<p>Publish to <code class="docutils literal notranslate"><span class="pre">modpoll/&lt;device&gt;/set</span></code>:</p>
+<p>Publish to <code class="docutils literal notranslate"><span class="pre">modpoll/{device}/set</span></code>:</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
 <span class="w">  </span><span class="nt">&quot;holding_reg01&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span>
 <span class="p">}</span>
 </pre></div>
 </div>
-<p>See <a class="reference internal" href="usage.html"><span class="doc">Basic Usage</span></a> for details on MQTT topics and write semantics.</p>
+<p>See <a class="reference internal" href="usage.html"><span class="doc">Basic Usage</span></a> for MQTT topics, write constraints (including <code class="docutils literal notranslate"><span class="pre">bool8</span></code> array values), and read-only object types.</p>
 </section>
 </section>
 

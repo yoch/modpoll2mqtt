@@ -1,21 +1,21 @@
+
+
 <!DOCTYPE html>
-<html class="writer-html5" lang="en" >
+<html class="writer-html5" lang="en" data-content_root="./">
 <head>
-  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Welcome to modpoll2mqtt’s documentation! &mdash; modpoll2mqtt 2.1.1 documentation</title>
-      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
-      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
-  <!--[if lt IE 9]>
-    <script src="_static/js/html5shiv.min.js"></script>
-  <![endif]-->
+  <title>Welcome to modpoll2mqtt’s documentation! &mdash; modpoll2mqtt 2.1.2 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
   
-        <script src="_static/jquery.js?v=5d32c60e"></script>
-        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="_static/documentation_options.js?v=841abef3"></script>
-        <script src="_static/doctools.js?v=9a2dae69"></script>
-        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=b3e23499"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -33,9 +33,6 @@
           <a href="#" class="icon icon-home">
             modpoll2mqtt
           </a>
-              <div class="version">
-                2.1.1
-              </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
     <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
@@ -96,25 +93,33 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Basic Usage</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="usage.html#Named Arguments">Named Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#modpoll.arg_parser-get_parser-named-arguments">Named Arguments</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage.html#commandline-usage">Commandline Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#configuration-sources">Configuration sources</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#export">Export</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#operational-flags">Operational flags</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage.html#configuration-file">Configuration File</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage.html#framers-and-transports">Framers and transports</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage.html#mqtt-retain">MQTT retain</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage.html#mqtt-payload-keys">MQTT payload keys</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#mqtt-single-publish">MQTT single publish</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#mqtt-diagnostics">MQTT diagnostics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#publish-behavior">Publish behavior</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage.html#mqtt-write-commands">MQTT write commands</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="configure.html">Configuration</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="configure.html#modbus-configure-file">Modbus Configure File</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configure.html#modbus-configure-file">Modbus configure file</a></li>
 <li class="toctree-l2"><a class="reference internal" href="configure.html#example-1-modsim-device-modbus-tcp-device">Example 1: Modsim device (Modbus TCP device)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="configure.html#example-2-scpm-s6-power-meter-modbus-rtu-device">Example 2: SCPM-S6 Power Meter (Modbus RTU device)</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#id1">2.1.1 (2026-06-11)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#section-1">2.1.0 (2026-06-10)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#section-2">2.0.0 (2026-06-10)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#unreleased">[Unreleased]</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#id1">2.1.2 (2026-06-15)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#section-1">2.1.1 (2026-06-11)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#section-2">2.1.0 (2026-06-10)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#section-3">2.0.0 (2026-06-10)</a></li>
 </ul>
 </li>
 </ul>

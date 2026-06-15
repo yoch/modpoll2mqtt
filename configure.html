@@ -1,21 +1,21 @@
+
+
 <!DOCTYPE html>
-<html class="writer-html5" lang="en" >
+<html class="writer-html5" lang="en" data-content_root="./">
 <head>
-  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Configuration &mdash; modpoll2mqtt 2.1.1 documentation</title>
-      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
-      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
-  <!--[if lt IE 9]>
-    <script src="_static/js/html5shiv.min.js"></script>
-  <![endif]-->
+  <title>Configuration &mdash; modpoll2mqtt 2.1.2 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
   
-        <script src="_static/jquery.js?v=5d32c60e"></script>
-        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="_static/documentation_options.js?v=841abef3"></script>
-        <script src="_static/doctools.js?v=9a2dae69"></script>
-        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=b3e23499"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -34,9 +34,6 @@
           <a href="index.html" class="icon icon-home">
             modpoll2mqtt
           </a>
-              <div class="version">
-                2.1.1
-              </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
     <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
@@ -51,7 +48,13 @@
 <li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Basic Usage</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Configuration</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#modbus-configure-file">Modbus Configure File</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#modbus-configure-file">Modbus configure file</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#csv-structure">CSV structure</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#supported-dtypes">Supported dtypes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#poll-size-limits">Poll size limits</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#validation-rules">Validation rules</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="#example-1-modsim-device-modbus-tcp-device">Example 1: Modsim device (Modbus TCP device)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#example-2-scpm-s6-power-meter-modbus-rtu-device">Example 2: SCPM-S6 Power Meter (Modbus RTU device)</a></li>
 </ul>
@@ -86,10 +89,41 @@
   <section id="configuration">
 <h1>Configuration<a class="headerlink" href="#configuration" title="Link to this heading"></a></h1>
 <section id="modbus-configure-file">
-<h2>Modbus Configure File<a class="headerlink" href="#modbus-configure-file" title="Link to this heading"></a></h2>
-<p>In order to communicate with modbus devices, a proper modbus configure file is required.
-It is mainly to describe the device address and register mappings.</p>
-<p>Here is the basic structure of modbus configure file.</p>
+<h2>Modbus configure file<a class="headerlink" href="#modbus-configure-file" title="Link to this heading"></a></h2>
+<p>To communicate with Modbus devices, a CSV configure file describes device addresses, poll ranges, and reference mappings. See also <a class="reference internal" href="usage.html"><span class="doc">Basic Usage</span></a> for coil/register bit semantics and MQTT write constraints.</p>
+<section id="csv-structure">
+<h3>CSV structure<a class="headerlink" href="#csv-structure" title="Link to this heading"></a></h3>
+<p>Each non-empty row is one of three types:</p>
+<ul class="simple">
+<li><p><strong>device</strong> — <code class="docutils literal notranslate"><span class="pre">device,&lt;name&gt;,&lt;slave_id&gt;</span></code></p></li>
+<li><p><strong>poll</strong> — <code class="docutils literal notranslate"><span class="pre">poll,&lt;object_type&gt;,&lt;start&gt;,&lt;size&gt;,&lt;endian&gt;</span></code></p></li>
+<li><p><strong>ref</strong> — <code class="docutils literal notranslate"><span class="pre">ref,&lt;name&gt;,&lt;address&gt;,&lt;dtype&gt;,&lt;rw&gt;,&lt;unit&gt;,&lt;scale&gt;</span></code> (<code class="docutils literal notranslate"><span class="pre">&lt;unit&gt;</span></code> and <code class="docutils literal notranslate"><span class="pre">&lt;scale&gt;</span></code> optional)</p></li>
+<li><p><strong>device</strong> — <code class="docutils literal notranslate"><span class="pre">&lt;name&gt;</span></code> is unique per file (used in MQTT topics). <code class="docutils literal notranslate"><span class="pre">&lt;slave_id&gt;</span></code> is the Modbus unit ID (1–254). Multiple devices may share the same slave ID when they are logical views of one physical slave; poll ranges must not overlap.</p></li>
+<li><p><strong>poll</strong> — <code class="docutils literal notranslate"><span class="pre">&lt;object_type&gt;</span></code> is <code class="docutils literal notranslate"><span class="pre">coil</span></code>, <code class="docutils literal notranslate"><span class="pre">discrete_input</span></code>, <code class="docutils literal notranslate"><span class="pre">holding_register</span></code>, or <code class="docutils literal notranslate"><span class="pre">input_register</span></code>. <code class="docutils literal notranslate"><span class="pre">&lt;start&gt;</span></code> and <code class="docutils literal notranslate"><span class="pre">&lt;size&gt;</span></code> define the address range. <code class="docutils literal notranslate"><span class="pre">&lt;endian&gt;</span></code> must be <code class="docutils literal notranslate"><span class="pre">BE_BE</span></code>, <code class="docutils literal notranslate"><span class="pre">LE_BE</span></code>, <code class="docutils literal notranslate"><span class="pre">LE_LE</span></code>, or <code class="docutils literal notranslate"><span class="pre">BE_LE</span></code>.</p></li>
+<li><p><strong>ref</strong> — <code class="docutils literal notranslate"><span class="pre">&lt;address&gt;</span></code> may be decimal or hexadecimal (<code class="docutils literal notranslate"><span class="pre">0x10</span></code>). For register bit reads, use <code class="docutils literal notranslate"><span class="pre">&lt;address&gt;:&lt;bit&gt;</span></code> (0–15) with <code class="docutils literal notranslate"><span class="pre">dtype</span></code> <code class="docutils literal notranslate"><span class="pre">bool</span></code>. <code class="docutils literal notranslate"><span class="pre">&lt;rw&gt;</span></code> is <code class="docutils literal notranslate"><span class="pre">r</span></code>, <code class="docutils literal notranslate"><span class="pre">w</span></code>, or <code class="docutils literal notranslate"><span class="pre">rw</span></code>. <code class="docutils literal notranslate"><span class="pre">&lt;unit&gt;</span></code> and <code class="docutils literal notranslate"><span class="pre">&lt;scale&gt;</span></code> are optional; scale multiplies read values and divides write values.</p></li>
+</ul>
+</section>
+<section id="supported-dtypes">
+<h3>Supported dtypes<a class="headerlink" href="#supported-dtypes" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">uint16</span></code>, <code class="docutils literal notranslate"><span class="pre">int16</span></code>, <code class="docutils literal notranslate"><span class="pre">uint32</span></code>, <code class="docutils literal notranslate"><span class="pre">int32</span></code>, <code class="docutils literal notranslate"><span class="pre">uint64</span></code>, <code class="docutils literal notranslate"><span class="pre">int64</span></code>, <code class="docutils literal notranslate"><span class="pre">float16</span></code>, <code class="docutils literal notranslate"><span class="pre">float32</span></code>, <code class="docutils literal notranslate"><span class="pre">float64</span></code>, <code class="docutils literal notranslate"><span class="pre">bool</span></code>, <code class="docutils literal notranslate"><span class="pre">bool8</span></code>, <code class="docutils literal notranslate"><span class="pre">bool16</span></code>, <code class="docutils literal notranslate"><span class="pre">stringNNN</span></code> (where <code class="docutils literal notranslate"><span class="pre">NNN</span></code> is the string byte length).</p>
+</section>
+<section id="poll-size-limits">
+<h3>Poll size limits<a class="headerlink" href="#poll-size-limits" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Coils and discrete inputs: maximum <strong>2000</strong> points per poll.</p></li>
+<li><p>Holding and input registers: maximum <strong>123</strong> registers per poll.</p></li>
+</ul>
+</section>
+<section id="validation-rules">
+<h3>Validation rules<a class="headerlink" href="#validation-rules" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Duplicate <strong>device</strong> names or <strong>reference</strong> names on the same device abort config loading.</p></li>
+<li><p>Duplicate pollers (same function code, start, size, endian on one device) are ignored with a warning.</p></li>
+<li><p>Overlapping poll ranges on the same slave ID and function code produce a warning.</p></li>
+<li><p>References outside the poller range or with invalid endian/dtype are ignored with a warning.</p></li>
+<li><p>References marked <code class="docutils literal notranslate"><span class="pre">w</span></code> or <code class="docutils literal notranslate"><span class="pre">rw</span></code> on <code class="docutils literal notranslate"><span class="pre">discrete_input</span></code> or <code class="docutils literal notranslate"><span class="pre">input_register</span></code> pollers log a warning at load time (Modbus inputs are read-only; MQTT writes are rejected).</p></li>
+</ul>
+<p>Here is the annotated template:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span><span class="c1"># Modbus Configuration File</span>
 <span class="linenos"> 2</span><span class="c1"># --------------------------</span>
 <span class="linenos"> 3</span><span class="c1"># This configuration file is to describe the Modbus registers of target device(s) and defines poller(s) to help polling data.</span>
@@ -113,7 +147,7 @@ It is mainly to describe the device address and register mappings.</p>
 <span class="linenos">21</span><span class="c1"># &lt;endian&gt;: byte_order and word_order e.g. BE_BE/BE_LE/LE_LE/LE_BE</span>
 <span class="linenos">22</span><span class="c1"># &lt;ref_name&gt;: any string without spaces to describe the reference</span>
 <span class="linenos">23</span><span class="c1"># &lt;address&gt;: integer 0 to 65535 (the modbus address and should match the poller range)</span>
-<span class="linenos">24</span><span class="c1"># &lt;dtype&gt;: uint16/int16/uint32/int32/float16/float32/bool/bool8/bool16/stringXXX (defaults to uint16)</span>
+<span class="linenos">24</span><span class="c1"># &lt;dtype&gt;: uint16/int16/uint32/int32/uint64/int64/float16/float32/float64/bool/bool8/bool16/stringXXX (required)</span>
 <span class="linenos">25</span><span class="c1"># &lt;rw&gt;: read/write setting e.g. r/w/rw</span>
 <span class="linenos">26</span><span class="c1"># &lt;unit&gt; (optional): the measurement unit of reference</span>
 <span class="linenos">27</span><span class="c1"># &lt;scale&gt; (Optional): a float value to be multiplied with actual register reading; leave empty to disable scaling (0 is not supported as a multiplier)</span>
@@ -168,10 +202,10 @@ It is mainly to describe the device address and register mappings.</p>
 </pre></div>
 </div>
 </section>
+</section>
 <section id="example-1-modsim-device-modbus-tcp-device">
 <h2>Example 1: Modsim device (Modbus TCP device)<a class="headerlink" href="#example-1-modsim-device-modbus-tcp-device" title="Link to this heading"></a></h2>
 <p>This example configuration is included for local testing with a Modbus TCP simulator or device.</p>
-<p>Here is an example of modbus configure file for reading modsim device.</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span><span class="n">device</span><span class="p">,</span><span class="n">modsim01</span><span class="p">,</span><span class="mi">1</span><span class="p">,,</span>
 <span class="linenos"> 2</span><span class="n">poll</span><span class="p">,</span><span class="n">coil</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">16</span><span class="p">,</span><span class="n">BE_BE</span>
 <span class="linenos"> 3</span><span class="n">ref</span><span class="p">,</span><span class="n">coil01</span><span class="o">-</span><span class="mi">08</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="n">bool8</span><span class="p">,</span><span class="n">rw</span>
@@ -220,7 +254,6 @@ It is mainly to describe the device address and register mappings.</p>
 <section id="example-2-scpm-s6-power-meter-modbus-rtu-device">
 <h2>Example 2: SCPM-S6 Power Meter (Modbus RTU device)<a class="headerlink" href="#example-2-scpm-s6-power-meter-modbus-rtu-device" title="Link to this heading"></a></h2>
 <p>SCPM-S6 is designed as a sub-circuit power meter to monitor multiple electrical circuit power consumptions.</p>
-<p>Here is an example of modbus configure file for SCPM-S6.</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span><span class="n">device</span><span class="p">,</span><span class="n">scpm001</span><span class="p">,</span><span class="mi">1</span><span class="p">,,,</span>
 <span class="linenos"> 2</span><span class="n">poll</span><span class="p">,</span><span class="n">holding_register</span><span class="p">,</span><span class="mi">46001</span><span class="p">,</span><span class="mi">6</span><span class="p">,</span><span class="n">BE_BE</span><span class="p">,</span>
 <span class="linenos"> 3</span><span class="n">ref</span><span class="p">,</span><span class="n">CT_TYPE</span><span class="p">,</span><span class="mi">46001</span><span class="p">,</span><span class="n">uint16</span><span class="p">,</span><span class="n">rw</span><span class="p">,</span>
