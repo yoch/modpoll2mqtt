@@ -1,9 +1,9 @@
 import json
 from unittest.mock import MagicMock
 
+from modpoll.modbus_models import Device
 from modpoll.modbus_task import (
     MQTT_GLOBAL_DIAGNOSTICS_TOPIC,
-    Device,
     ModbusHandler,
     count_devices_failing,
     publish_global_diagnostics,

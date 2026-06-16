@@ -1,7 +1,8 @@
 from unittest.mock import MagicMock
 
 from modpoll.modbus_connection import ModbusConnectionManager
-from modpoll.modbus_task import Device, ModbusHandler, Poller
+from modpoll.modbus_models import Device, Poller
+from modpoll.modbus_task import ModbusHandler
 
 
 class Clock:

@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import pytest
 from tests.helpers.modbus import FakeModbusMaster, handler_with_device
 
-from modpoll.modbus_task import Device, Poller, Reference
+from modpoll.modbus_models import Device, Poller, Reference
 
 
 def test_read_holding_uint16():

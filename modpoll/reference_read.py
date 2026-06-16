@@ -3,52 +3,11 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping, Sequence
-from typing import Protocol, cast
+from typing import Protocol
 
+from .modbus_models import Device, Poller, Reference
 from .reference_common import call_with_device_id, find_poller_for_ref
 from .types import ModbusClient, ModbusValue
-
-
-class _Reference(Protocol):
-    name: str
-    address: int
-    dtype: str
-    bit: int | None
-    ref_width: int
-    val: ModbusValue
-
-    def update_value(self, v: ModbusValue) -> None: ...
-
-    def check_sanity(
-        self, reference: int, size: int, fc: int | None = None
-    ) -> bool: ...
-
-
-class _Poller(Protocol):
-    fc: int
-    disabled: bool
-    start_address: int
-    size: int
-
-    def decode_coil_bits(
-        self, ref: _Reference, bits: list[bool], read_start: int
-    ) -> ModbusValue: ...
-
-    def decode_register_block(
-        self, ref: _Reference, registers: list[int], read_start: int
-    ) -> ModbusValue: ...
-
-
-class _Device(Protocol):
-    name: str
-    devid: int
-
-    @property
-    def references(self) -> Mapping[str, _Reference]: ...
-
-    @property
-    def pollerList(self) -> Sequence[_Poller]: ...
 
 
 class _ReadHandler(Protocol):
@@ -63,15 +22,14 @@ class _ReadHandler(Protocol):
 
 def read_references(
     handler: _ReadHandler,
-    dev: object,
+    dev: Device,
     ref_names: list[str],
 ) -> tuple[dict[str, ModbusValue], int, int]:
     """Read refs on demand. Returns (values, unknown_skips, read_failures)."""
-    dev = cast(_Device, dev)
     values: dict[str, ModbusValue] = {}
     unknown_skips = 0
     read_failures = 0
-    resolved: list[tuple[str, _Reference, _Poller]] = []
+    resolved: list[tuple[str, Reference, Poller]] = []
 
     for ref_name in ref_names:
         ref = dev.references.get(ref_name)
@@ -131,10 +89,10 @@ class _RegisterBatch:
 
     def __init__(
         self,
-        poller: _Poller,
+        poller: Poller,
         read_start: int,
         read_count: int,
-        ref_by_name: dict[str, _Reference],
+        ref_by_name: dict[str, Reference],
     ):
         self.poller = poller
         self.read_start = read_start
@@ -143,7 +101,7 @@ class _RegisterBatch:
 
 
 def _group_register_batches(
-    resolved: list[tuple[str, _Reference, _Poller]],
+    resolved: list[tuple[str, Reference, Poller]],
 ) -> list[_RegisterBatch]:
     register_items = [
         (name, ref, poller) for name, ref, poller in resolved if poller.fc in (3, 4)
@@ -152,7 +110,7 @@ def _group_register_batches(
         return []
 
     batches: list[_RegisterBatch] = []
-    by_poller: dict[int, list[tuple[str, _Reference, _Poller]]] = {}
+    by_poller: dict[int, list[tuple[str, Reference, Poller]]] = {}
     for item in register_items:
         by_poller.setdefault(id(item[2]), []).append(item)
 
@@ -161,7 +119,7 @@ def _group_register_batches(
         poller = items[0][2]
         batch_start = items[0][1].address
         batch_end = items[0][1].address + items[0][1].ref_width
-        ref_by_name: dict[str, _Reference] = {items[0][0]: items[0][1]}
+        ref_by_name: dict[str, Reference] = {items[0][0]: items[0][1]}
 
         for name, ref, _ in items[1:]:
             ref_end = ref.address + ref.ref_width
@@ -188,7 +146,7 @@ def _group_register_batches(
     return batches
 
 
-def _coil_read_params(ref: _Reference, poller: _Poller) -> tuple[int, int]:
+def _coil_read_params(ref: Reference, poller: Poller) -> tuple[int, int]:
     if ref.dtype == "bool" and ref.bit is None:
         return ref.address, 1
     if ref.dtype in ("bool8", "bool16"):
@@ -200,7 +158,7 @@ def _coil_read_params(ref: _Reference, poller: _Poller) -> tuple[int, int]:
 
 
 def _read_coils(
-    handler: _ReadHandler, dev: _Device, address: int, count: int
+    handler: _ReadHandler, dev: Device, address: int, count: int
 ) -> list[bool] | None:
     result = call_with_device_id(
         handler.modbus_client.read_coils,
@@ -214,7 +172,7 @@ def _read_coils(
 
 
 def _read_discrete_inputs(
-    handler: _ReadHandler, dev: _Device, address: int, count: int
+    handler: _ReadHandler, dev: Device, address: int, count: int
 ) -> list[bool] | None:
     result = call_with_device_id(
         handler.modbus_client.read_discrete_inputs,
@@ -228,7 +186,7 @@ def _read_discrete_inputs(
 
 
 def _read_holding_registers(
-    handler: _ReadHandler, dev: _Device, address: int, count: int
+    handler: _ReadHandler, dev: Device, address: int, count: int
 ) -> list[int] | None:
     result = call_with_device_id(
         handler.modbus_client.read_holding_registers,
@@ -242,7 +200,7 @@ def _read_holding_registers(
 
 
 def _read_input_registers(
-    handler: _ReadHandler, dev: _Device, address: int, count: int
+    handler: _ReadHandler, dev: Device, address: int, count: int
 ) -> list[int] | None:
     result = call_with_device_id(
         handler.modbus_client.read_input_registers,
@@ -257,9 +215,9 @@ def _read_input_registers(
 
 def _read_coil_reference(
     handler: _ReadHandler,
-    dev: _Device,
-    ref: _Reference,
-    poller: _Poller,
+    dev: Device,
+    ref: Reference,
+    poller: Poller,
 ) -> ModbusValue | None:
     address, count = _coil_read_params(ref, poller)
     if poller.fc == 1:
@@ -273,7 +231,7 @@ def _read_coil_reference(
 
 def _read_register_batch(
     handler: _ReadHandler,
-    dev: _Device,
+    dev: Device,
     batch: _RegisterBatch,
 ) -> tuple[dict[str, ModbusValue] | None, int]:
     poller = batch.poller

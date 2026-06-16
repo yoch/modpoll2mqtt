@@ -15,7 +15,8 @@ from tests.helpers.modbus import (
 )
 
 from modpoll.arg_parser import get_parser
-from modpoll.modbus_task import Device, ModbusHandler, Poller, Reference
+from modpoll.modbus_models import Device, Poller, Reference
+from modpoll.modbus_task import ModbusHandler
 from modpoll.mqtt_task import MqttHandler
 
 

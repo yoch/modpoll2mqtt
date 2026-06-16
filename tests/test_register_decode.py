@@ -1,4 +1,4 @@
-from modpoll.modbus_task import Device, Poller, Reference
+from modpoll.modbus_models import Device, Poller, Reference
 from modpoll.register_decode import Endian, RegisterDecoder
 
 

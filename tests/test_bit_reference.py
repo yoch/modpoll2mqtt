@@ -1,7 +1,8 @@
 import csv
 from unittest.mock import MagicMock
 
-from modpoll.modbus_task import Device, ModbusHandler, Poller, Reference
+from modpoll.modbus_models import Device, Poller, Reference
+from modpoll.modbus_task import ModbusHandler
 
 
 class FakeResult:
