@@ -72,17 +72,22 @@ poetry config keyring.enabled false
 
 4. Don't forget to add test cases for your added functionality in the `tests` directory.
 
-5. **Before every commit**, run the same quality checks as CI (`ci-check` workflow in
-   [`.github/workflows/ci-check.yml`](.github/workflows/ci-check.yml)). A skipped `make check`
-   locally often means a red CI run (e.g. `black` reformatting `modpoll/modbus_task.py`).
+5. **Before every `git commit`** (not only before a release or pull request), run the
+   same quality checks as CI (`ci-check` workflow in
+   [`.github/workflows/ci-check.yml`](.github/workflows/ci-check.yml)):
 
     ```bash
     make check
     ```
 
+    This runs `black` among other tools. **Do not commit Python changes until
+    `make check` passes cleanly** — if `black` reformats files, stage those changes and
+    include them in the same commit. Committing first and amending afterward is a smell;
+    it usually means this step was skipped.
+
     `make install` registers pre-commit hooks that catch many issues at commit time, but
     they do not replace a full `make check` (deptry, poetry lock, etc.). Re-run
-    `make check` after fixing hook failures and before `git commit --amend`.
+    `make check` after fixing hook failures.
 
     Then, validate that all unit tests are passing:
 
@@ -113,9 +118,11 @@ poetry config keyring.enabled false
     Override endpoints with `MODBUS_TEST_HOST` / `MODBUS_TEST_PORT` or
     `MQTT_TEST_HOST` / `MQTT_TEST_PORT` when needed.
 
-6. Commit your changes and push your branch to GitHub:
+6. Commit your changes and push your branch to GitHub. Run `make check` again if you
+   changed files after the last successful run:
 
     ```bash
+    make check
     git add .
     git commit -m "Your detailed description of your changes."
     git push origin your-branch-name
