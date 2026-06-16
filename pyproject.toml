@@ -1,15 +1,11 @@
-[tool.poetry]
+[project]
 name = "modpoll2mqtt"
 version = "2.2.0"
 description = "Modbus to MQTT gateway — fork of modpoll"
-authors = ["yoch <yoch.melka@gmail.com>"]
-repository = "https://github.com/yoch/modpoll2mqtt"
-documentation = "https://yoch.github.io/modpoll2mqtt"
-homepage = "https://github.com/yoch/modpoll2mqtt"
+authors = [{ name = "yoch", email = "yoch.melka@gmail.com" }]
 readme = "README.md"
-packages = [{ include = "modpoll" }]
 license = "MIT"
-requires-poetry = ">=2.0,<3.0"
+requires-python = ">=3.10,<4.0"
 keywords = [
     "modbus",
     "modpoll",
@@ -29,7 +25,6 @@ classifiers = [
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -41,26 +36,37 @@ classifiers = [
     "Topic :: Home Automation",
     "Topic :: Utilities",
 ]
+dependencies = [
+    "pymodbus>=3.10,<4.0",
+    "paho-mqtt>=2.1.0,<3.0",
+    "prettytable>=3.9.0,<4.0",
+    "requests>=2.32.5,<3.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yoch/modpoll2mqtt"
+Repository = "https://github.com/yoch/modpoll2mqtt"
+Documentation = "https://yoch.github.io/modpoll2mqtt"
+
+[project.optional-dependencies]
+serial = ["pyserial>=3.5,<4.0"]
+
+[project.scripts]
+modpoll = "modpoll.main:app"
+
+[tool.poetry]
+packages = [{ include = "modpoll" }]
+requires-poetry = ">=2.0,<3.0"
 
 [tool.poetry.requires-plugins]
 poetry-plugin-export = ">=1.10"
-
-[tool.poetry.dependencies]
-python = ">=3.10,<4.0"
-pymodbus = ">=3.10,<4.0"
-paho-mqtt = "^2.1.0"
-prettytable = "^3.9.0"
-requests = "^2.32.5"
-pyserial = { version = "^3.5", optional = true }
-
-[tool.poetry.extras]
-serial = ["pyserial"]
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^4.0"
 pytest = "^8.2.2"
 deptry = "^0.25"
 ruff = "^0.11"
+basedpyright = "^1.39.8"
 
 [tool.poetry.group.docs.dependencies]
 sphinx = ">=7,<10"
@@ -88,9 +94,6 @@ markers = [
     "mqtt: MQTT broker integration tests",
 ]
 
-[tool.poetry.scripts]
-modpoll = "modpoll.main:app"
-
 [tool.ruff]
 line-length = 88
 target-version = "py310"
@@ -106,3 +109,8 @@ known-first-party = ["modpoll"]
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[tool.pyright]
+typeCheckingMode = "strict"
+reportImportCycles = true
+include = ["modpoll"]

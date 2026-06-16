@@ -7,14 +7,17 @@ from __future__ import annotations
 
 from array import array
 from struct import pack, unpack
+from typing import Literal
+
+ByteOrder = Literal[">", "<"]
 
 
 class Endian:
-    BIG = ">"
-    LITTLE = "<"
+    BIG: ByteOrder = ">"
+    LITTLE: ByteOrder = "<"
 
 
-ENDIAN_MAP = {
+ENDIAN_MAP: dict[str, tuple[ByteOrder, ByteOrder]] = {
     "BE_BE": (Endian.BIG, Endian.BIG),
     "LE_BE": (Endian.LITTLE, Endian.BIG),
     "LE_LE": (Endian.LITTLE, Endian.LITTLE),
@@ -27,7 +30,12 @@ class RegisterDecoder:
 
     __slots__ = ("_payload", "_pointer", "_byteorder", "_wordorder")
 
-    def __init__(self, payload: bytes, byteorder=Endian.LITTLE, wordorder=Endian.BIG):
+    def __init__(
+        self,
+        payload: bytes,
+        byteorder: ByteOrder = Endian.LITTLE,
+        wordorder: ByteOrder = Endian.BIG,
+    ):
         self._payload = payload
         self._pointer = 0
         self._byteorder = byteorder
@@ -37,8 +45,8 @@ class RegisterDecoder:
     def from_registers(
         cls,
         registers: list[int],
-        byteorder=Endian.LITTLE,
-        wordorder=Endian.BIG,
+        byteorder: ByteOrder = Endian.LITTLE,
+        wordorder: ByteOrder = Endian.BIG,
     ) -> RegisterDecoder:
         payload = pack(f"!{len(registers)}H", *registers)
         return cls(payload, byteorder, wordorder)
@@ -114,7 +122,9 @@ class RegisterEncoder:
 
     __slots__ = ("_payload", "_byteorder", "_wordorder")
 
-    def __init__(self, byteorder=Endian.LITTLE, wordorder=Endian.BIG):
+    def __init__(
+        self, byteorder: ByteOrder = Endian.LITTLE, wordorder: ByteOrder = Endian.BIG
+    ):
         self._payload = bytearray()
         self._byteorder = byteorder
         self._wordorder = wordorder

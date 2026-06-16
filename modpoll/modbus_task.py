@@ -1,7 +1,12 @@
+from __future__ import annotations
+
 import csv
 import json
 import logging
 import math
+from argparse import Namespace
+from collections.abc import Iterator
+from typing import Any
 
 import requests
 from prettytable import PrettyTable
@@ -10,15 +15,18 @@ from pymodbus.exceptions import ModbusException
 from pymodbus.framer import FramerType
 
 from .mqtt_task import MqttHandler
-from .reference_common import (
-    call_with_device_id as _call_with_device_id,
-)
-from .reference_common import (
-    find_device as _find_device,
-)
+from .reference_common import call_with_device_id as _call_with_device_id
+from .reference_common import find_device as _find_device
 from .reference_read import read_references as _read_references
 from .reference_write import write_reference as _write_reference
 from .register_decode import ENDIAN_MAP, RegisterDecoder
+from .types import (
+    ModbusClient,
+    ModbusConnectionDiagnostics,
+    ModbusValue,
+    MqttPayload,
+    is_numeric_modbus_value,
+)
 from .utils import delay_thread, on_threading_event
 
 FLOAT_TYPE_PRECISION = 3
@@ -35,7 +43,7 @@ _MQTT_KEYS_NAME_WITH_UNIT = "name-with-unit"
 _MQTT_KEYS_NAME_ONLY = "name-only"
 
 
-def _mqtt_payload_key(ref: "Reference", mqtt_keys: str) -> str:
+def _mqtt_payload_key(ref: Reference, mqtt_keys: str) -> str:
     if mqtt_keys == _MQTT_KEYS_NAME_ONLY:
         return ref.name
     if mqtt_keys == _MQTT_KEYS_NAME_WITH_UNIT:
@@ -43,7 +51,7 @@ def _mqtt_payload_key(ref: "Reference", mqtt_keys: str) -> str:
     raise ValueError(f"Unknown mqtt_keys: {mqtt_keys}")
 
 
-def format_mqtt_scalar(val):
+def format_mqtt_scalar(val: ModbusValue) -> ModbusValue:
     """Return an MQTT-safe scalar, or None to omit (non-finite float)."""
     if isinstance(val, float) and not math.isfinite(val):
         return None
@@ -52,8 +60,10 @@ def format_mqtt_scalar(val):
     return val
 
 
-def format_mqtt_payload_values(values: dict) -> dict:
-    out = {}
+def format_mqtt_payload_values(
+    values: dict[str, ModbusValue],
+) -> dict[str, ModbusValue]:
+    out: dict[str, ModbusValue] = {}
     for key, val in values.items():
         mqtt_val = format_mqtt_scalar(val)
         if mqtt_val is None and isinstance(val, float):
@@ -62,12 +72,12 @@ def format_mqtt_payload_values(values: dict) -> dict:
     return out
 
 
-def _poller_identity(poller: "Poller") -> tuple:
+def _poller_identity(poller: Poller) -> tuple[int, int, int, str]:
     return (poller.fc, poller.start_address, poller.size, poller.endian.upper())
 
 
 def _validate_cross_device_config(
-    device_list: list["Device"], logger: logging.Logger
+    device_list: list[Device], logger: logging.Logger
 ) -> None:
     by_slave: dict[int, list[str]] = {}
     by_slave_fc: dict[tuple[int, int], list[tuple[str, int, int]]] = {}
@@ -102,11 +112,11 @@ def _validate_cross_device_config(
 
 
 class Device:
-    def __init__(self, device_name: str, device_id: int):
+    def __init__(self, device_name: str, device_id: int) -> None:
         self.name = device_name
         self.devid = device_id
         self.pollerList: list[Poller] = []
-        self.references: dict = {}
+        self.references: dict[str, Reference] = {}
         self.errorCount = 0
         self.pollCount = 0
         self.pollSuccess = False
@@ -120,7 +130,7 @@ class Device:
         self.setSuccess = 0
         self.setUnknownRefs = 0
 
-    def add_reference_mapping(self, ref):
+    def add_reference_mapping(self, ref: Reference) -> None:
         self.references[ref.name] = ref
 
 
@@ -132,7 +142,7 @@ class Poller:
         start_address: int,
         size: int,
         endian: str,
-    ):
+    ) -> None:
         self.device = device
         self.fc = function_code
         self.start_address = start_address
@@ -143,11 +153,11 @@ class Poller:
         self.failcounter = 0
         self.logger = logging.getLogger(__name__)
 
-    def poll(self, master) -> bool:
+    def poll(self, master: ModbusClient) -> bool:
         result = None
-        data = None
+        data: list[int] | None = None
 
-        def _call_read(method):
+        def _call_read(method: Any) -> Any:
             return _call_with_device_id(
                 method,
                 self.start_address,
@@ -167,6 +177,11 @@ class Poller:
         if result is not None and not result.isError():
             if self.fc in (1, 2):
                 bits = result.bits
+                if bits is None:
+                    self.update_statistics(False)
+                    for ref in self.readableReferences:
+                        ref.update_value(None)
+                    return False
                 sorted_refs = sorted(self.readableReferences, key=lambda r: r.address)
                 for ref in sorted_refs:
                     try:
@@ -183,6 +198,11 @@ class Poller:
                         )
             else:
                 data = result.registers
+                if data is None:
+                    self.update_statistics(False)
+                    for ref in self.readableReferences:
+                        ref.update_value(None)
+                    return False
                 sorted_refs = sorted(self.readableReferences, key=lambda r: r.address)
                 for ref in sorted_refs:
                     try:
@@ -201,13 +221,15 @@ class Poller:
             ref.update_value(None)
         return False
 
-    def get_decoder(self, data):
+    def get_decoder(self, data: list[int]) -> RegisterDecoder:
         byteorder, wordorder = ENDIAN_MAP[self.endian.strip().upper()]
         return RegisterDecoder.from_registers(
             data, byteorder=byteorder, wordorder=wordorder
         )
 
-    def decode_coil_bits(self, ref: "Reference", bits: list, read_start: int):
+    def decode_coil_bits(
+        self, ref: Reference, bits: list[bool], read_start: int
+    ) -> ModbusValue:
         """Decode a single reference from a coil/discrete_input read.
 
         ``read_start`` is the Modbus address corresponding to ``bits[0]``.
@@ -226,7 +248,9 @@ class Poller:
             f"Unsupported dtype '{ref.dtype}' on coil/discrete_input poller"
         )
 
-    def decode_register_block(self, ref: "Reference", registers: list, read_start: int):
+    def decode_register_block(
+        self, ref: Reference, registers: list[int], read_start: int
+    ) -> ModbusValue:
         """Decode a single reference from a register read starting at ``read_start``."""
         offset_bytes = (ref.address - read_start) * 2
         if offset_bytes < 0:
@@ -238,7 +262,9 @@ class Poller:
         decoder.skip_bytes(offset_bytes)
         return self._decode_register_value(ref, decoder)
 
-    def _decode_register_value(self, ref: "Reference", decoder: RegisterDecoder):
+    def _decode_register_value(
+        self, ref: Reference, decoder: RegisterDecoder
+    ) -> ModbusValue:
         if ref.dtype == "bool" and ref.bit is not None:
             register_value = decoder.decode_16bit_uint()
             return bool((register_value >> ref.bit) & 1)
@@ -268,11 +294,11 @@ class Poller:
             )
         raise ValueError(f"Unsupported dtype '{ref.dtype}' for register decode")
 
-    def add_readable_reference(self, ref: "Reference"):
+    def add_readable_reference(self, ref: Reference) -> None:
         if ref not in self.readableReferences:
             self.readableReferences.append(ref)
 
-    def update_statistics(self, success: bool):
+    def update_statistics(self, success: bool) -> None:
         self.device.pollCount += 1
         if success:
             self.failcounter = 0
@@ -290,9 +316,9 @@ class Reference:
         ref_addr: str,
         dtype: str,
         rw: str,
-        unit: str,
-        scale: float,
-    ):
+        unit: str | None,
+        scale: float | None,
+    ) -> None:
         self.device = device
         self.name = ref_name
         self.bit: int | None = None
@@ -318,9 +344,9 @@ class Reference:
         self.rw = rw.lower()
         self.unit = unit
         self.scale = scale
-        self.val = None
+        self.val: ModbusValue = None
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, Reference):
             return (
                 self.address == other.address
@@ -375,8 +401,8 @@ class Reference:
             reference, size + reference
         ) and self.address + self.ref_width - 1 in range(reference, size + reference)
 
-    def update_value(self, v):
-        if self.scale and not isinstance(v, bool):
+    def update_value(self, v: ModbusValue) -> None:
+        if self.scale and is_numeric_modbus_value(v):
             try:
                 v = v * float(self.scale)
             except (ValueError, TypeError):
@@ -387,7 +413,7 @@ class Reference:
 class ModbusHandler:
     def __init__(
         self,
-        modbus_client,
+        modbus_client: ModbusClient,
         config_file: str,
         mqtt_handler: MqttHandler | None = None,
         timeout: float = 3.0,
@@ -399,7 +425,7 @@ class ModbusHandler:
         mqtt_keys: str = _MQTT_KEYS_NAME_WITH_UNIT,
         autoremove: bool = False,
         csv_delimiter_code: str = "comma",
-    ):
+    ) -> None:
         self.modbus_client = modbus_client
         self.config_file = config_file
         self.csv_delimiter_code = csv_delimiter_code
@@ -447,11 +473,11 @@ class ModbusHandler:
             )
             return False
 
-    def _parse_config(self, csv_reader) -> list[Device]:
-        device_list = []
-        current_device = None
-        current_poller = None
-        seen_device_names: set = set()
+    def _parse_config(self, csv_reader: Iterator[list[str]]) -> list[Device]:
+        device_list: list[Device] = []
+        current_device: Device | None = None
+        current_poller: Poller | None = None
+        seen_device_names: set[str] = set()
         try:
             for row in csv_reader:
                 if not row or all(cell.strip() == "" for cell in row):
@@ -530,7 +556,7 @@ class ModbusHandler:
             self.logger.error(f"Error parsing config: {e}")
             return []
 
-    def _create_poller(self, row, current_device):
+    def _create_poller(self, row: list[str], current_device: Device) -> Poller | None:
         fc = row[1].lower()
         try:
             start_address = int(row[2], 0)
@@ -546,7 +572,7 @@ class ModbusHandler:
             return None
         return Poller(current_device, function_code, start_address, size, endian)
 
-    def _get_function_code(self, fc):
+    def _get_function_code(self, fc: str) -> int | None:
         fc_map = {
             "coil": 1,
             "discrete_input": 2,
@@ -558,7 +584,7 @@ class ModbusHandler:
         self.logger.warning(f"Unknown function code ({fc}) ignoring poller.")
         return None
 
-    def _validate_poller_size(self, function_code, size):
+    def _validate_poller_size(self, function_code: int, size: int) -> bool:
         if size <= 0:
             self.logger.error(
                 f"Poller size must be greater than 0: {size}. Ignoring poller."
@@ -576,7 +602,9 @@ class ModbusHandler:
             return False
         return True
 
-    def _create_reference(self, row, current_device):
+    def _create_reference(
+        self, row: list[str], current_device: Device
+    ) -> Reference | None:
         if len(row) < CONFIG_REF_COL_MIN:
             self.logger.error("Invalid reference configuration")
             return None
@@ -595,7 +623,7 @@ class ModbusHandler:
             scale = None
         return Reference(current_device, ref_name, address, dtype, rw, unit, scale)
 
-    def _validate_reference(self, ref, current_poller):
+    def _validate_reference(self, ref: Reference, current_poller: Poller) -> bool:
         if current_poller.fc in (1, 2) and ref.bit is not None:
             self.logger.warning(
                 f"Reference {ref.name}: address:bit syntax is only supported on "
@@ -624,7 +652,9 @@ class ModbusHandler:
         self._warn_if_read_only_poller_marked_writable(ref, current_poller)
         return True
 
-    def _warn_if_read_only_poller_marked_writable(self, ref, current_poller):
+    def _warn_if_read_only_poller_marked_writable(
+        self, ref: Reference, current_poller: Poller
+    ) -> None:
         if current_poller.fc not in (2, 4) or "w" not in ref.rw:
             return
         object_type = "discrete_input" if current_poller.fc == 2 else "input_register"
@@ -634,11 +664,11 @@ class ModbusHandler:
             "rejected."
         )
 
-    def _begin_poll_cycle(self):
+    def _begin_poll_cycle(self) -> None:
         for dev in self.deviceList:
             dev.pollSuccess = False
 
-    def _maybe_disable_poller(self, dev, poller):
+    def _maybe_disable_poller(self, dev: Device, poller: Poller) -> None:
         if self.autoremove and poller.failcounter >= 3:
             poller.disabled = True
             self.logger.warning(
@@ -647,14 +677,14 @@ class ModbusHandler:
                 f"after 3 consecutive failures"
             )
 
-    def _record_poll_failure(self):
+    def _record_poll_failure(self) -> None:
         for dev in self.deviceList:
             for p in dev.pollerList:
                 if not p.disabled:
                     p.update_statistics(False)
                     self._maybe_disable_poller(dev, p)
 
-    def on_poll_unavailable(self):
+    def on_poll_unavailable(self) -> None:
         self._begin_poll_cycle()
         self._record_poll_failure()
 
@@ -685,13 +715,15 @@ class ModbusHandler:
     def has_device(self, device_name: str) -> bool:
         return any(d.name == device_name for d in self.deviceList)
 
-    def write_reference(self, device_name: str, ref_name: str, value) -> bool:
+    def write_reference(
+        self, device_name: str, ref_name: str, value: ModbusValue
+    ) -> bool:
         return _write_reference(self, device_name, ref_name, value)
 
     def write_references(
         self,
         device_name: str,
-        ref_values: dict,
+        ref_values: MqttPayload,
     ) -> None:
         dev = _find_device(self, device_name)
         if dev is None:
@@ -699,7 +731,7 @@ class ModbusHandler:
 
         dev.setCount += 1
         unknown_skips = 0
-        writes = []
+        writes: list[tuple[str, ModbusValue]] = []
         for ref_name, value in ref_values.items():
             if ref_name not in dev.references:
                 self.logger.warning(
@@ -733,7 +765,9 @@ class ModbusHandler:
         if ok_count:
             self.logger.info(f"Wrote {ok_count} value(s) for device={device_name}")
 
-    def read_references(self, device_name: str, ref_names: list[str]) -> dict:
+    def read_references(
+        self, device_name: str, ref_names: list[str]
+    ) -> dict[str, ModbusValue]:
         dev = _find_device(self, device_name)
         if dev is None:
             return {}
@@ -776,7 +810,7 @@ class ModbusHandler:
         if dev is not None:
             dev.setErrors += 1
 
-    def print_results(self):
+    def print_results(self) -> None:
         for dev in self.deviceList:
             table = PrettyTable()
             table.field_names = ["Reference", "Value", "Unit"]
@@ -793,7 +827,7 @@ class ModbusHandler:
             print(f"\nDevice: {dev.name}")
             print(table)
 
-    def publish_data(self, timestamp=None):
+    def publish_data(self, timestamp: float | None = None) -> None:
         if not self.mqtt_handler or not self.mqtt_publish_topic_pattern:
             return
 
@@ -804,7 +838,7 @@ class ModbusHandler:
                 )
                 continue
 
-            payload = {}
+            payload: dict[str, ModbusValue] = {}
             for ref in dev.references.values():
                 if ref.val is None:
                     continue
@@ -818,15 +852,13 @@ class ModbusHandler:
                     topic = f"{self.mqtt_publish_topic_pattern.replace('{{device_name}}', dev.name)}/{ref.name}"
                     if isinstance(ref_val, list):
                         for i, entry in enumerate(ref_val):
-                            msg = (
-                                json.dumps(entry) if isinstance(entry, bool) else entry
-                            )
+                            msg = json.dumps(entry)
                             self.mqtt_handler.publish_data_message(f"{topic}/{i}", msg)
                     else:
                         msg = (
                             json.dumps(ref_val)
                             if isinstance(ref_val, bool)
-                            else ref_val
+                            else str(ref_val)
                         )
                         self.mqtt_handler.publish_data_message(topic, msg)
 
@@ -838,7 +870,7 @@ class ModbusHandler:
                 )
                 self.mqtt_handler.publish_data_message(topic, json.dumps(payload))
 
-    def publish_diagnostics(self):
+    def publish_diagnostics(self) -> None:
         if not self.mqtt_handler:
             return
         if not self.mqtt_diagnostics_topic_pattern:
@@ -865,8 +897,8 @@ class ModbusHandler:
             )
             self.mqtt_handler.publish(topic, json.dumps(payload), retain=retain)
 
-    def export(self, file, timestamp=None):
-        data = {}
+    def export(self, file: str, timestamp: float | None = None) -> None:
+        data: dict[str, dict[str, ModbusValue]] = {}
         for dev in self.deviceList:
             dev_data = {}
             for ref in dev.references.values():
@@ -900,16 +932,15 @@ def publish_global_diagnostics(
     modbus_handlers: list[ModbusHandler],
     modbus_ok: bool,
     last_cycle_s: float,
-    connection_diagnostics: dict | None = None,
+    connection_diagnostics: ModbusConnectionDiagnostics | None = None,
 ) -> None:
     payload = {
         "mqtt_connected": mqtt_handler.is_connected(),
         "modbus_ok": modbus_ok,
         "devices_failing": count_devices_failing(modbus_handlers),
         "last_cycle_s": last_cycle_s,
+        **(connection_diagnostics or {}),
     }
-    if connection_diagnostics:
-        payload.update(connection_diagnostics)
     mqtt_handler.publish(
         MQTT_GLOBAL_DIAGNOSTICS_TOPIC,
         json.dumps(payload),
@@ -917,8 +948,10 @@ def publish_global_diagnostics(
     )
 
 
-def setup_modbus_handlers(args, mqtt_handler: MqttHandler | None = None):
-    modbus_handlers = []
+def setup_modbus_handlers(
+    args: Namespace, mqtt_handler: MqttHandler | None = None
+) -> tuple[ModbusClient, list[ModbusHandler]]:
+    modbus_handlers: list[ModbusHandler] = []
     modbus_client = _create_modbus_client(args)
     for config_file in args.config:
         modbus_handler = ModbusHandler(
@@ -940,7 +973,7 @@ def setup_modbus_handlers(args, mqtt_handler: MqttHandler | None = None):
     return modbus_client, modbus_handlers
 
 
-def _create_modbus_client(args):
+def _create_modbus_client(args: Namespace) -> ModbusClient:
     transport = _determine_transport(args)
 
     if transport == "serial":
@@ -958,46 +991,55 @@ def _create_modbus_client(args):
     raise ValueError("No communication method specified.")
 
 
-def _create_serial_client(args, port, framer):
+def _create_serial_client(
+    args: Namespace, port: str, framer: FramerType | None
+) -> ModbusSerialClient:
     if not port:
         raise ValueError("Serial port/URL must be provided for serial transports.")
     parity = _get_parity(args.serial_parity)
-    client_args = {
-        "port": port,
-        "baudrate": int(args.serial_baud),
-        "bytesize": 8,
-        "parity": parity,
-        "stopbits": 1,
-        "timeout": args.timeout,
-    }
     if framer:
-        client_args["framer"] = framer
-    return ModbusSerialClient(**client_args)
+        return ModbusSerialClient(
+            port=port,
+            baudrate=int(args.serial_baud),
+            bytesize=8,
+            parity=parity,
+            stopbits=1,
+            timeout=args.timeout,
+            framer=framer,
+        )
+    return ModbusSerialClient(
+        port=port,
+        baudrate=int(args.serial_baud),
+        bytesize=8,
+        parity=parity,
+        stopbits=1,
+        timeout=args.timeout,
+    )
 
 
-def _create_tcp_client(args, framer):
-    client_args = {
-        "host": args.tcp,
-        "port": args.tcp_port,
-        "timeout": args.timeout,
-    }
+def _create_tcp_client(args: Namespace, framer: FramerType | None) -> ModbusTcpClient:
     if framer:
-        client_args["framer"] = framer
-    return ModbusTcpClient(**client_args)
+        return ModbusTcpClient(
+            host=args.tcp,
+            port=args.tcp_port,
+            timeout=args.timeout,
+            framer=framer,
+        )
+    return ModbusTcpClient(host=args.tcp, port=args.tcp_port, timeout=args.timeout)
 
 
-def _create_udp_client(args, framer):
-    client_args = {
-        "host": args.udp,
-        "port": args.udp_port,
-        "timeout": args.timeout,
-    }
+def _create_udp_client(args: Namespace, framer: FramerType | None) -> ModbusUdpClient:
     if framer:
-        client_args["framer"] = framer
-    return ModbusUdpClient(**client_args)
+        return ModbusUdpClient(
+            host=args.udp,
+            port=args.udp_port,
+            timeout=args.timeout,
+            framer=framer,
+        )
+    return ModbusUdpClient(host=args.udp, port=args.udp_port, timeout=args.timeout)
 
 
-def _get_parity(serial_parity):
+def _get_parity(serial_parity: str) -> str:
     if serial_parity == "odd":
         return "O"
     elif serial_parity == "even":
@@ -1006,8 +1048,8 @@ def _get_parity(serial_parity):
         return "N"
 
 
-def _determine_transport(args):
-    transports = []
+def _determine_transport(args: Namespace) -> str:
+    transports: list[str] = []
     if args.serial:
         transports.append("serial")
     if args.tcp:
@@ -1024,7 +1066,7 @@ def _determine_transport(args):
     return transports[0]
 
 
-def _resolve_framer(transport, framer_name):
+def _resolve_framer(transport: str, framer_name: str) -> FramerType | None:
     """Resolve the requested framer to a concrete class."""
 
     if framer_name == "default":

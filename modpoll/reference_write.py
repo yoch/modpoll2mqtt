@@ -2,25 +2,65 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import logging
+from collections.abc import Mapping, Sequence
+from typing import Protocol, TypeGuard
 
-from .reference_common import (
-    call_with_device_id as _call_with_device_id,
-)
-from .reference_common import (
-    find_device as _find_device,
-)
-from .reference_common import (
-    find_poller_for_ref as _find_poller_for_ref,
-)
+from .reference_common import call_with_device_id as _call_with_device_id
+from .reference_common import find_device as _find_device
+from .reference_common import find_poller_for_ref as _find_poller_for_ref
 from .register_decode import ENDIAN_MAP, RegisterEncoder
-
-if TYPE_CHECKING:
-    from .modbus_task import Device, ModbusHandler, Poller, Reference
+from .types import ModbusClient, ModbusValue, is_bool_list, is_numeric_modbus_value
 
 
-def _value_to_raw(ref: Reference, value):
-    if ref.scale and not isinstance(value, bool) and not isinstance(value, list):
+class _Reference(Protocol):
+    name: str
+    rw: str
+    dtype: str
+    bit: int | None
+    address: int
+    scale: float | None
+    ref_width: int
+
+    def check_sanity(
+        self, reference: int, size: int, fc: int | None = None
+    ) -> bool: ...
+
+
+class _RegisterDecoder(Protocol):
+    def decode_16bit_uint(self) -> int: ...
+
+
+class _Poller(Protocol):
+    fc: int
+    start_address: int
+    size: int
+    endian: str
+
+    def get_decoder(self, data: list[int]) -> _RegisterDecoder: ...
+
+
+class _Device(Protocol):
+    name: str
+    devid: int
+
+    @property
+    def references(self) -> Mapping[str, _Reference]: ...
+
+    @property
+    def pollerList(self) -> Sequence[_Poller]: ...
+
+
+class _WriteHandler(Protocol):
+    modbus_client: ModbusClient
+    logger: logging.Logger
+
+    @property
+    def deviceList(self) -> Sequence[_Device]: ...
+
+
+def _value_to_raw(ref: _Reference, value: ModbusValue) -> ModbusValue:
+    if ref.scale and is_numeric_modbus_value(value):
         raw = value / float(ref.scale)
         if ref.dtype in (
             "int16",
@@ -35,20 +75,22 @@ def _value_to_raw(ref: Reference, value):
     return value
 
 
-def _get_encoder(poller: Poller) -> RegisterEncoder:
+def _get_encoder(poller: _Poller) -> RegisterEncoder:
     byteorder, wordorder = ENDIAN_MAP[poller.endian.strip().upper()]
     return RegisterEncoder(byteorder=byteorder, wordorder=wordorder)
 
 
-def _expect_bool_list(ref: Reference, value, width: int, logger) -> bool:
-    if not isinstance(value, list) or len(value) != width:
+def _expect_bool_list(
+    value: ModbusValue, width: int, ref: _Reference, logger: logging.Logger
+) -> TypeGuard[list[bool]]:
+    if not is_bool_list(value, width):
         logger.error(f"Reference '{ref.name}' expects a list of {width} booleans")
         return False
     return True
 
 
 def write_reference(
-    handler: ModbusHandler, device_name: str, ref_name: str, value
+    handler: _WriteHandler, device_name: str, ref_name: str, value: ModbusValue
 ) -> bool:
     dev = _find_device(handler, device_name)
     if dev is None:
@@ -86,28 +128,32 @@ def write_reference(
     return _write_register_reference(handler, dev, ref, poller, value)
 
 
-def _write_coil(handler: ModbusHandler, dev: Device, address: int, value) -> bool:
+def _write_coil(
+    handler: _WriteHandler, dev: _Device, address: int, value: bool
+) -> bool:
     result = _call_with_device_id(
         handler.modbus_client.write_coil,
         address,
         value,
         device_id=dev.devid,
     )
-    return result is not None and not result.isError()
+    return not result.isError()
 
 
-def _write_coils(handler: ModbusHandler, dev: Device, address: int, values) -> bool:
+def _write_coils(
+    handler: _WriteHandler, dev: _Device, address: int, values: list[bool]
+) -> bool:
     result = _call_with_device_id(
         handler.modbus_client.write_coils,
         address,
         values,
         device_id=dev.devid,
     )
-    return result is not None and not result.isError()
+    return not result.isError()
 
 
 def _write_register(
-    handler: ModbusHandler, dev: Device, address: int, value: int
+    handler: _WriteHandler, dev: _Device, address: int, value: int
 ) -> bool:
     result = _call_with_device_id(
         handler.modbus_client.write_register,
@@ -115,51 +161,55 @@ def _write_register(
         value,
         device_id=dev.devid,
     )
-    return result is not None and not result.isError()
+    return not result.isError()
 
 
-def _write_registers(handler: ModbusHandler, dev: Device, address: int, values) -> bool:
+def _write_registers(
+    handler: _WriteHandler, dev: _Device, address: int, values: list[int]
+) -> bool:
     result = _call_with_device_id(
         handler.modbus_client.write_registers,
         address,
         values,
         device_id=dev.devid,
     )
-    return result is not None and not result.isError()
+    return not result.isError()
 
 
-def _read_coils(handler: ModbusHandler, dev: Device, address: int, count: int):
+def _read_coils(
+    handler: _WriteHandler, dev: _Device, address: int, count: int
+) -> list[bool] | None:
     result = _call_with_device_id(
         handler.modbus_client.read_coils,
         address,
         count=count,
         device_id=dev.devid,
     )
-    if result is not None and not result.isError():
+    if not result.isError():
         return result.bits
     return None
 
 
 def _read_holding_registers(
-    handler: ModbusHandler, dev: Device, address: int, count: int
-):
+    handler: _WriteHandler, dev: _Device, address: int, count: int
+) -> list[int] | None:
     result = _call_with_device_id(
         handler.modbus_client.read_holding_registers,
         address,
         count=count,
         device_id=dev.devid,
     )
-    if result is not None and not result.isError():
+    if not result.isError():
         return result.registers
     return None
 
 
 def _write_coil_reference(
-    handler: ModbusHandler,
-    dev: Device,
-    ref: Reference,
-    poller: Poller,
-    value,
+    handler: _WriteHandler,
+    dev: _Device,
+    ref: _Reference,
+    poller: _Poller,
+    value: ModbusValue,
 ) -> bool:
     if ref.dtype == "bool" and ref.bit is None:
         if not isinstance(value, bool):
@@ -169,7 +219,7 @@ def _write_coil_reference(
 
     if ref.dtype in ("bool8", "bool16"):
         width = 8 if ref.dtype == "bool8" else 16
-        if not _expect_bool_list(ref, value, width, handler.logger):
+        if not _expect_bool_list(value, width, ref, handler.logger):
             return False
         group_offset = ref.address - poller.start_address
         bit_offset = group_offset * 8
@@ -188,11 +238,11 @@ def _write_coil_reference(
 
 
 def _write_register_reference(
-    handler: ModbusHandler,
-    dev: Device,
-    ref: Reference,
-    poller: Poller,
-    value,
+    handler: _WriteHandler,
+    dev: _Device,
+    ref: _Reference,
+    poller: _Poller,
+    value: ModbusValue,
 ) -> bool:
     if ref.dtype == "bool" and ref.bit is not None:
         if not isinstance(value, bool):
@@ -210,7 +260,7 @@ def _write_register_reference(
 
     if ref.dtype in ("bool8", "bool16"):
         width = 8 if ref.dtype == "bool8" else 16
-        if not _expect_bool_list(ref, value, width, handler.logger):
+        if not _expect_bool_list(value, width, ref, handler.logger):
             return False
         registers = _read_holding_registers(handler, dev, ref.address, 1)
         if registers is None:
@@ -227,20 +277,35 @@ def _write_register_reference(
 
     raw_value = _value_to_raw(ref, value)
     encoder = _get_encoder(poller)
-    encode_methods = {
+    float_encoders = {
+        "float16": encoder.encode_16bit_float,
+        "float32": encoder.encode_32bit_float,
+        "float64": encoder.encode_64bit_float,
+    }
+    int_encoders = {
         "uint16": encoder.encode_16bit_uint,
         "int16": encoder.encode_16bit_int,
         "uint32": encoder.encode_32bit_uint,
         "int32": encoder.encode_32bit_int,
         "uint64": encoder.encode_64bit_uint,
         "int64": encoder.encode_64bit_int,
-        "float16": encoder.encode_16bit_float,
-        "float32": encoder.encode_32bit_float,
-        "float64": encoder.encode_64bit_float,
     }
 
-    if ref.dtype in encode_methods:
-        encode_methods[ref.dtype](raw_value)
+    if ref.dtype in float_encoders:
+        if not is_numeric_modbus_value(raw_value):
+            handler.logger.error(f"Reference '{ref.name}' expects a numeric value")
+            return False
+        float_encoders[ref.dtype](float(raw_value))
+        registers = encoder.to_registers()
+        if len(registers) == 1:
+            return _write_register(handler, dev, ref.address, registers[0])
+        return _write_registers(handler, dev, ref.address, registers)
+
+    if ref.dtype in int_encoders:
+        if not is_numeric_modbus_value(raw_value):
+            handler.logger.error(f"Reference '{ref.name}' expects a numeric value")
+            return False
+        int_encoders[ref.dtype](int(round(raw_value)))
         registers = encoder.to_registers()
         if len(registers) == 1:
             return _write_register(handler, dev, ref.address, registers[0])

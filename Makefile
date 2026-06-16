@@ -36,8 +36,13 @@ test-integration-mqtt: ## Run MQTT integration tests (requires broker; default b
 .PHONY: test-integration
 test-integration: test-integration-modbus test-integration-mqtt ## Run all integration tests
 
+.PHONY: typecheck
+typecheck: ## Run basedpyright on modpoll/
+	@echo "🚀 Type checking: Running basedpyright"
+	@poetry run basedpyright modpoll/
+
 .PHONY: ci
-ci: check test ## Run the same quality gate as CI (check + unit tests)
+ci: check typecheck test ## Run the same quality gate as CI (check + typecheck + unit tests)
 
 .PHONY: build
 build: clean-build ## Build wheel file using poetry

@@ -1,4 +1,8 @@
-import argparse
+from __future__ import annotations
+
+from argparse import ArgumentParser, Namespace
+from collections.abc import Iterable
+from typing import cast
 
 from . import __version__
 
@@ -19,7 +23,7 @@ def _default_rtu_interval(serial_baud: int) -> float:
     return max(frame_gap, _RTU_MIN_AUTO_INTERVAL)
 
 
-def _default_interval_for_transport(args) -> float:
+def _default_interval_for_transport(args: Namespace) -> float:
     if args.serial:
         return _default_rtu_interval(args.serial_baud)
     if args.udp:
@@ -27,16 +31,24 @@ def _default_interval_for_transport(args) -> float:
     return _INTERVAL_DEFAULT_TCP
 
 
-class ModpollArgumentParser(argparse.ArgumentParser):
-    def parse_args(self, args=None, namespace=None):
-        parsed = super().parse_args(args, namespace)
+class ModpollArgumentParser(ArgumentParser):
+    def parse_args(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self,
+        args: Iterable[str] | None = None,
+        namespace: Namespace | None = None,
+    ) -> Namespace:
+        parsed = cast(Namespace, super().parse_args(args, namespace))
         return self._validate_timing_options(parsed)
 
-    def parse_known_args(self, args=None, namespace=None):
+    def parse_known_args(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self,
+        args: Iterable[str] | None = None,
+        namespace: Namespace | None = None,
+    ) -> tuple[Namespace, list[str]]:
         parsed, extras = super().parse_known_args(args, namespace)
-        return self._validate_timing_options(parsed), extras
+        return self._validate_timing_options(cast(Namespace, parsed)), extras
 
-    def _validate_timing_options(self, parsed):
+    def _validate_timing_options(self, parsed: Namespace) -> Namespace:
         if parsed.serial_baud <= 0:
             self.error("--serial-baud must be greater than 0")
         if parsed.interval is None:
@@ -58,7 +70,7 @@ class ModpollArgumentParser(argparse.ArgumentParser):
         return parsed
 
 
-def get_parser():
+def get_parser() -> ModpollArgumentParser:
     parser = ModpollArgumentParser(
         description=f"modpoll2mqtt v{__version__} - Modbus to MQTT gateway"
     )

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import logging
 import queue
@@ -5,16 +7,12 @@ import socket
 import ssl
 import time
 from threading import Event
+from typing import Any
 
 from paho.mqtt import MQTTException
-from paho.mqtt.client import (
-    CallbackAPIVersion,
-    MQTTMessageInfo,
-    MQTTProtocolVersion,
-)
-from paho.mqtt.client import (
-    Client as MQTTClient,
-)
+from paho.mqtt.client import Client as MQTTClient
+from paho.mqtt.client import MQTTMessageInfo
+from paho.mqtt.enums import CallbackAPIVersion, MQTTProtocolVersion
 
 from .utils import delay_thread, on_threading_event
 
@@ -41,7 +39,7 @@ class MqttHandler:
         log_level: str = "INFO",
         rx_queue_size: int = 1000,
         retain_data_publishes: bool = False,
-    ):
+    ) -> None:
         self.name = name
         self.host = host
         self.port = port
@@ -61,7 +59,9 @@ class MqttHandler:
         self.clean_start_or_session = qos == 0
         self.rx_queue_size = rx_queue_size
         self.retain_data_publishes = retain_data_publishes
-        self.rx_queue: queue.Queue = queue.Queue(maxsize=rx_queue_size)
+        self.rx_queue: queue.Queue[tuple[str, bytes]] = queue.Queue(
+            maxsize=rx_queue_size
+        )
         self._connected_event = Event()
         self._connect_rc: int | None = None
         self._closed = False
@@ -69,7 +69,14 @@ class MqttHandler:
 
     # Callback signatures follow paho CallbackAPIVersion.VERSION2: for both
     # MQTT v3.1.1 and v5, flags is a ConnectFlags and reason codes are ReasonCode.
-    def _on_connect(self, client, userdata, flags, reason_code, properties):
+    def _on_connect(
+        self,
+        client: MQTTClient,
+        userdata: Any,
+        flags: Any,
+        reason_code: Any,
+        properties: Any,
+    ) -> None:
         rc = reason_code.value
         self._connect_rc = rc
 
@@ -88,17 +95,31 @@ class MqttHandler:
             client.subscribe(topic, self.qos)
         self._connected_event.set()
 
-    def _on_subscribe(self, client, userdata, mid, reason_codes, properties):
+    def _on_subscribe(
+        self,
+        client: MQTTClient,
+        userdata: Any,
+        mid: int,
+        reason_codes: Any,
+        properties: Any,
+    ) -> None:
         for rc in reason_codes:
             if rc.is_failure:
                 self.logger.warning(f"Failed to subscribe. Reason: {rc}")
             else:
                 self.logger.info(f"Subscribed successfully (QoS={rc.value}).")
 
-    def _on_publish(self, client, userdata, mid, reason_codes, properties):
+    def _on_publish(
+        self,
+        client: MQTTClient,
+        userdata: Any,
+        mid: int,
+        reason_codes: Any,
+        properties: Any,
+    ) -> None:
         self.logger.debug(f"Message (mid={mid}) published successfully.")
 
-    def _on_message(self, client, userdata, message):
+    def _on_message(self, client: MQTTClient, userdata: Any, message: Any) -> None:
         if message.retain == 0:
             self.logger.info(f"Receive message ({message.topic}): {message.payload}")
         else:
@@ -110,16 +131,32 @@ class MqttHandler:
         except queue.Full:
             self.logger.warning("MQTT receiving queue is full, ignoring new message.")
 
-    def _on_disconnect(self, client, userdata, flags, reason_code, properties):
+    def _on_disconnect(
+        self,
+        client: MQTTClient,
+        userdata: Any,
+        flags: Any,
+        reason_code: Any,
+        properties: Any,
+    ) -> None:
         if reason_code.value == 0:
             self.logger.info("Disconnected.")
         else:
             self.logger.warning(f"Disconnected with error, reason_code={reason_code}.")
 
-    def _on_log(self, client, userdata, level, buf):
+    def _on_log(self, client: MQTTClient, userdata: Any, level: int, buf: str) -> None:
         self.logger.debug(f"{level} | {buf}")
 
+    def _connect_succeeded(self) -> bool:
+        return (
+            self._connect_rc == 0
+            and self.mqtt_client is not None
+            and self.mqtt_client.is_connected()
+        )
+
     def _setup_tls(self) -> bool:
+        if self.mqtt_client is None:
+            return False
         try:
             tls_versions = {
                 "tlsv1.2": getattr(ssl, "PROTOCOL_TLSv1_2", None),
@@ -137,7 +174,7 @@ class MqttHandler:
             else:
                 tls_version = ssl.PROTOCOL_TLS
             cert_required = ssl.CERT_NONE if self.insecure else ssl.CERT_REQUIRED
-            self.mqtt_client.tls_set(
+            self.mqtt_client.tls_set(  # pyright: ignore[reportUnknownMemberType] - paho stubs type cert_reqs as Unknown
                 ca_certs=self.cacerts,
                 certfile=None,
                 keyfile=None,
@@ -222,21 +259,25 @@ class MqttHandler:
         self._connect_rc = None
 
         try:
-            connect_kwargs: dict = {
-                "host": self.host,
-                "port": self.port,
-                "keepalive": 60,
-            }
-            if self.mqtt_version == "5.0":
-                connect_kwargs["clean_start"] = self.clean_start_or_session
-
             self.mqtt_client.will_set(
                 _MQTT_STATUS_TOPIC,
                 json.dumps({"online": False}),
                 qos=self.qos,
                 retain=True,
             )
-            self.mqtt_client.connect_async(**connect_kwargs)
+            if self.mqtt_version == "5.0":
+                self.mqtt_client.connect_async(
+                    host=self.host,
+                    port=self.port,
+                    keepalive=60,
+                    clean_start=self.clean_start_or_session,
+                )
+            else:
+                self.mqtt_client.connect_async(
+                    host=self.host,
+                    port=self.port,
+                    keepalive=60,
+                )
             self.mqtt_client.loop_start()
         except (OSError, MQTTException, TypeError, ValueError) as ex:
             self.logger.error(f"MQTT connection error: {ex}")
@@ -246,7 +287,7 @@ class MqttHandler:
         deadline = time.monotonic() + _MQTT_CONNECT_TIMEOUT
         while time.monotonic() < deadline:
             if self._connected_event.is_set():
-                if self._connect_rc == 0 and self.mqtt_client.is_connected():
+                if self._connect_succeeded():
                     self.publish_status(True)
                     return True
                 self._stop_mqtt_loop()

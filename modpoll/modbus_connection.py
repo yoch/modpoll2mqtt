@@ -5,10 +5,10 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
 
 from pymodbus.exceptions import ModbusException
 
+from .types import ModbusClient, ModbusConnectionDiagnostics
 from .utils import get_utc_time
 
 MODBUS_BACKOFF_BASE = 1.0
@@ -18,7 +18,7 @@ MODBUS_BACKOFF_MAX = 60.0
 @dataclass
 class TransactionResult:
     ok: bool
-    value: Any = None
+    value: object | None = None
     skipped: bool = False
     callback_started: bool = False
     error: str | None = None
@@ -27,22 +27,22 @@ class TransactionResult:
 class ModbusConnectionManager:
     """Keep one Modbus client open while bounding reconnect and failure paths."""
 
-    DISCONNECTED = "DISCONNECTED"
-    CONNECTING = "CONNECTING"
-    READY = "READY"
-    BACKOFF = "BACKOFF"
-    CLOSING = "CLOSING"
+    DISCONNECTED: str = "DISCONNECTED"
+    CONNECTING: str = "CONNECTING"
+    READY: str = "READY"
+    BACKOFF: str = "BACKOFF"
+    CLOSING: str = "CLOSING"
 
     def __init__(
         self,
-        client,
+        client: ModbusClient,
         *,
         backoff_base: float = MODBUS_BACKOFF_BASE,
         backoff_max: float = MODBUS_BACKOFF_MAX,
         max_connection_age: float | None = None,
         clock: Callable[[], float] = get_utc_time,
         logger: logging.Logger | None = None,
-    ):
+    ) -> None:
         self.client = client
         self.backoff_base = backoff_base
         self.backoff_max = backoff_max
@@ -50,17 +50,17 @@ class ModbusConnectionManager:
         self.clock = clock
         self.logger = logger or logging.getLogger(__name__)
 
-        self.state = self.DISCONNECTED
-        self.connected_since = None
-        self.last_success_at = None
-        self.last_failure_at = None
-        self.last_error = None
-        self.backoff_until = None
-        self.consecutive_failures = 0
-        self.connect_count = 0
-        self.reconnect_count = 0
-        self.transaction_failure_count = 0
-        self._has_connected = False
+        self.state: str = self.DISCONNECTED
+        self.connected_since: float | None = None
+        self.last_success_at: float | None = None
+        self.last_failure_at: float | None = None
+        self.last_error: str | None = None
+        self.backoff_until: float | None = None
+        self.consecutive_failures: int = 0
+        self.connect_count: int = 0
+        self.reconnect_count: int = 0
+        self.transaction_failure_count: int = 0
+        self._has_connected: bool = False
 
     @property
     def connected(self) -> bool:
@@ -107,7 +107,7 @@ class ModbusConnectionManager:
         return True
 
     def execute(
-        self, operation_name: str, callback: Callable[[], Any]
+        self, operation_name: str, callback: Callable[[], object]
     ) -> TransactionResult:
         if not self.ensure_connected():
             return TransactionResult(
@@ -152,7 +152,7 @@ class ModbusConnectionManager:
             self.connected_since = None
             self.state = self.DISCONNECTED
 
-    def diagnostics(self) -> dict:
+    def diagnostics(self) -> ModbusConnectionDiagnostics:
         return {
             "modbus_connection_state": self.state,
             "modbus_connected": self.connected,

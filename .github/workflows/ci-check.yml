@@ -1,4 +1,4 @@
-# Lint, lock file, dependency checks (make check), and docs build (make docs).
+# Lint, lock file, dependency checks, typecheck, and docs build.
 name: ci-check
 
 on:
@@ -22,6 +22,9 @@ jobs:
 
       - name: Run checks
         run: make check
+
+      - name: Run typecheck
+        run: make typecheck
 
   docs-build:
     runs-on: ubuntu-latest

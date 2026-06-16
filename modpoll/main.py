@@ -1,31 +1,37 @@
+from __future__ import annotations
+
 import json
 import logging
 import re
 import signal
 import sys
 from functools import partial
+from types import FrameType
 
 from . import __version__
 from .arg_parser import get_parser
 from .modbus_connection import ModbusConnectionManager
 from .modbus_task import (
+    ModbusHandler,
     format_mqtt_payload_values,
     publish_global_diagnostics,
     setup_modbus_handlers,
 )
 from .mqtt_task import MqttHandler
+from .types import is_modbus_value_map
 from .utils import delay_thread, get_utc_time, on_threading_event, set_threading_event
 
 LOG_SIMPLE = "%(asctime)s | %(levelname).1s | %(name)s | %(message)s"
-logger = None
+logger: logging.Logger | None = None
 
 
-def _signal_handler(signal, frame):
-    logger.info(f"Exiting {sys.argv[0]}")
+def _signal_handler(signum: int, frame: FrameType | None) -> None:
+    if logger is not None:
+        logger.info(f"Exiting {sys.argv[0]}")
     set_threading_event()
 
 
-def extract_device_from_mqtt_topic(pattern: str, topic: str):
+def extract_device_from_mqtt_topic(pattern: str, topic: str) -> str | None:
     """Return device name from the first '+' wildcard segment, or None if no match."""
     parts = pattern.split("+")
     if len(parts) < 2:
@@ -52,24 +58,21 @@ def classify_mqtt_command_topic(
     return None, None
 
 
-def setup_logging(level, format):
-    logging.basicConfig(level=level, format=format)
+def setup_logging(level: str | int, log_format: str) -> None:
+    logging.basicConfig(level=level, format=log_format)
 
 
-def app(name="modpoll"):
-    mqtt_handler = None
-    modbus_client = None
-    modbus_handlers = []
+def app(name: str = "modpoll") -> None:
+    mqtt_handler: MqttHandler | None = None
+    modbus_handlers: list[ModbusHandler] = []
 
     print(
         f"\nmodpoll2mqtt v{__version__} - Modbus to MQTT gateway\n",
         flush=True,
     )
 
-    # parse args
     args = get_parser().parse_args()
 
-    # get logger
     setup_logging(args.loglevel, LOG_SIMPLE)
     global logger
     logger = logging.getLogger(__name__)
@@ -77,7 +80,6 @@ def app(name="modpoll"):
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
 
-    # setup mqtt
     if not args.mqtt_host:
         logger.info("No MQTT host specified, skip MQTT setup.")
     else:
@@ -143,7 +145,6 @@ def app(name="modpoll"):
                     )
             exit(1)
 
-    # setup modbus tasks
     modbus_client, modbus_handlers = setup_modbus_handlers(args, mqtt_handler)
     if modbus_handlers:
         logger.info(f"Loaded {len(modbus_handlers)} Modbus config(s).")
@@ -161,14 +162,12 @@ def app(name="modpoll"):
         max_connection_age=args.modbus_max_connection_age,
     )
 
-    # main loop
-    last_check = 0
-    last_diag = 0
+    last_check = 0.0
+    last_diag = 0.0
     last_modbus_ok = False
     last_cycle_s = 0.0
     while not on_threading_event():
         now = get_utc_time()
-        # routine check
         if now > last_check + args.rate:
             if last_check == 0:
                 elapsed = args.rate
@@ -216,7 +215,6 @@ def app(name="modpoll"):
                 )
         if on_threading_event():
             break
-        # Check if receive mqtt request
         if mqtt_handler:
             topic, payload = mqtt_handler.receive()
             if topic and payload:
@@ -242,8 +240,10 @@ def app(name="modpoll"):
                     logger.error(f"Failed to parse JSON message: {payload}")
                     continue
 
-                if not isinstance(command, dict):
-                    logger.error("MQTT command payload must be a JSON object")
+                if not is_modbus_value_map(command):
+                    logger.error(
+                        "MQTT command payload must be a JSON object with supported reference values"
+                    )
                     continue
 
                 if not command:
@@ -261,7 +261,9 @@ def app(name="modpoll"):
                         result = connection_manager.execute(
                             "write",
                             partial(
-                                modbus_handler.write_references, device_name, command
+                                modbus_handler.write_references,
+                                device_name,
+                                command,
                             ),
                         )
                         if not result.ok:
@@ -296,10 +298,17 @@ def app(name="modpoll"):
                                 modbus_handler.record_get_unavailable(device_name)
                             mqtt_handler.publish_data_message(response_topic, "{}")
                         else:
-                            mqtt_handler.publish_data_message(
-                                response_topic,
-                                json.dumps(format_mqtt_payload_values(result.value)),
-                            )
+                            get_values = result.value
+                            if not is_modbus_value_map(get_values):
+                                logger.error(
+                                    f"Unexpected Modbus get result for device={device_name}"
+                                )
+                                mqtt_handler.publish_data_message(response_topic, "{}")
+                            else:
+                                mqtt_handler.publish_data_message(
+                                    response_topic,
+                                    json.dumps(format_mqtt_payload_values(get_values)),
+                                )
                     break
 
                 if not device_found:
