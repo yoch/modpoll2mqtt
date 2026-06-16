@@ -19,6 +19,18 @@ class FakeModbusMaster:
         self.registers = list(registers or [])
         self.fail_addresses = set(fail_addresses or [])
         self.writes = []
+        self.connect_count = 0
+        self.close_count = 0
+        self.connected = False
+
+    def connect(self):
+        self.connect_count += 1
+        self.connected = True
+        return True
+
+    def close(self):
+        self.close_count += 1
+        self.connected = False
 
     def read_coils(self, address, *, count=1, device_id=1):
         return FakeModbusResult(bits=self.coils[address : address + count])

@@ -286,3 +286,81 @@ def test_mqtt_setup_close_errors_are_suppressed(monkeypatch):
         main.app()
 
     assert excinfo.value.code == 1
+
+
+def test_interval_default_depends_on_transport():
+    parser = get_parser()
+
+    tcp_args = parser.parse_args(["--config", "dummy.csv", "--tcp", "127.0.0.1"])
+    udp_args = parser.parse_args(["--config", "dummy.csv", "--udp", "127.0.0.1"])
+    serial_args = parser.parse_args(["--config", "dummy.csv", "--serial", "/dev/ttyUSB0"])
+    slow_serial_args = parser.parse_args(
+        [
+            "--config",
+            "dummy.csv",
+            "--serial",
+            "/dev/ttyUSB0",
+            "--serial-baud",
+            "1200",
+        ]
+    )
+
+    assert tcp_args.interval == 0.0
+    assert udp_args.interval == 0.0
+    assert serial_args.interval == 0.005
+    assert slow_serial_args.interval == pytest.approx(3.5 * 11 / 1200)
+
+
+def test_explicit_interval_overrides_transport_default():
+    args = get_parser().parse_args(
+        [
+            "--config",
+            "dummy.csv",
+            "--tcp",
+            "127.0.0.1",
+            "--interval",
+            "0.25",
+        ]
+    )
+
+    assert args.interval == 0.25
+
+
+@pytest.mark.parametrize(
+    "extra_args",
+    [
+        ["--interval", "-0.1"],
+        ["--serial", "/dev/ttyUSB0", "--serial-baud", "0"],
+        ["--modbus-backoff-base", "-1"],
+        ["--modbus-backoff-base", "2", "--modbus-backoff-max", "1"],
+        ["--modbus-max-connection-age", "0"],
+    ],
+)
+def test_invalid_timing_options_are_rejected(extra_args):
+    parser = get_parser()
+    argv = ["--config", "dummy.csv", "--tcp", "127.0.0.1", *extra_args]
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(argv)
+
+
+def test_parse_known_args_applies_interval_default_and_validation():
+    parser = get_parser()
+    args, extras = parser.parse_known_args(
+        ["--config", "dummy.csv", "--tcp", "127.0.0.1", "--unknown", "x"]
+    )
+
+    assert args.interval == 0.0
+    assert extras == ["--unknown", "x"]
+
+    with pytest.raises(SystemExit):
+        parser.parse_known_args(
+            [
+                "--config",
+                "dummy.csv",
+                "--tcp",
+                "127.0.0.1",
+                "--interval",
+                "-1",
+            ]
+        )

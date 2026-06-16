@@ -86,7 +86,7 @@ def test_poll_success_true_when_any_poller_succeeds():
     assert device.pollSuccess is True
 
 
-def test_failed_modbus_connect_clears_poll_success_and_skips_mqtt():
+def test_modbus_unavailable_clears_poll_success_and_skips_mqtt():
     device = Device("dev", 1)
     ref = Reference(device, "r1", "0", "uint16", "r", None, None)
     ref.val = 42
@@ -104,7 +104,7 @@ def test_failed_modbus_connect_clears_poll_success_and_skips_mqtt():
     )
     handler.deviceList = [device]
 
-    handler.on_connect_failure()
+    handler.on_poll_unavailable()
 
     assert device.pollSuccess is False
     handler.publish_data()
@@ -457,17 +457,28 @@ def test_bool16_check_sanity_requires_16_bits():
     assert ref_ok.check_sanity(0, 16, fc=1) is True
 
 
-def test_poller_handles_oserror_on_read():
+def test_handler_propagates_oserror_on_read_and_marks_failure():
     device = Device("dev", 1)
     poller = Poller(device, 1, 0, 8, "BE_BE")
     ref = Reference(device, "coil0", "0", "bool", "r", None, None)
+    ref.val = True
     poller.add_readable_reference(ref)
+    device.pollerList = [poller]
+    device.references = {"coil0": ref}
 
     class MasterRaisesOSError:
         def read_coils(self, *args, **kwargs):
             raise OSError("connection reset")
 
-    assert poller.poll(MasterRaisesOSError()) is False
+    handler = ModbusHandler(MasterRaisesOSError(), "dummy.csv", no_output=True)
+    handler.deviceList = [device]
+
+    with pytest.raises(OSError, match="connection reset"):
+        handler.poll()
+
+    assert device.pollSuccess is False
+    assert device.pollCount == 1
+    assert device.errorCount == 1
     assert ref.val is None
 
 
@@ -485,7 +496,7 @@ def test_poller_handles_none_result():
     assert ref.val is None
 
 
-def test_autoremove_on_connect_failure():
+def test_autoremove_on_poll_unavailable():
     device = Device("dev", 1)
     poller = Poller(device, 3, 0, 1, "BE_BE")
     device.pollerList = [poller]
@@ -499,7 +510,7 @@ def test_autoremove_on_connect_failure():
     handler.deviceList = [device]
 
     for _ in range(3):
-        handler.on_connect_failure()
+        handler.on_poll_unavailable()
 
     assert poller.disabled is True
 

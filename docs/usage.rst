@@ -62,6 +62,25 @@ Operational flags
 
 - ``--no-output`` suppresses poll result tables on stdout (replaces the former ``--daemon`` / ``-d`` flag; does not fork).
 - ``--delay`` waits N seconds after connecting before the first Modbus poll.
+- ``--interval`` waits between pollers. If omitted, the default is transport-aware: ``0.0`` seconds for TCP/UDP; for serial/RTU it is derived from ``--serial-baud`` using the Modbus RTU 3.5-character silent interval with a practical ``0.005`` s floor. Set it explicitly for slow devices that need extra settling time.
+
+Default serial/RTU examples:
+
+.. list-table::
+   :header-rows: 1
+
+   * - ``--serial-baud``
+     - Auto ``--interval``
+   * - ``1200``
+     - ``0.03208`` s
+   * - ``2400``
+     - ``0.01604`` s
+   * - ``4800``
+     - ``0.00802`` s
+   * - ``9600``
+     - ``0.005`` s
+   * - ``19200`` and above
+     - ``0.005`` s
 
 Configuration File
 ------------------
@@ -92,6 +111,21 @@ Framers and transports
 
 - Serial (`--serial`, alias `--rtu`) supports framers `rtu` and `ascii` (e.g., `--serial ... --framer ascii`). Binary framer was removed in pymodbus 3.9+. If `--framer default` is used, pymodbus defaults to RTU framer.
 - TCP/UDP (`--tcp`/`--udp`) use the `socket` framer; other framers are rejected. If `--framer default` is used, pymodbus defaults to socket framer.
+
+Persistent Modbus connection
+----------------------------
+
+``modpoll`` keeps the Modbus client open between poll cycles and MQTT commands. The connection is closed on process shutdown and after transport failures, then retried with a non-blocking exponential backoff. This avoids repeated connect/close overhead while preventing a dead bus or half-open socket from blocking the main loop for a long backoff sleep.
+
+Operational notes:
+
+- ``--timeout`` still bounds individual Modbus operations at the pymodbus client level.
+- ``--interval`` defaults to ``0.0`` on TCP/UDP so persistent connections are not hidden behind an artificial 0.5 s poller delay. Serial/RTU derives its default from ``--serial-baud`` using the Modbus RTU 3.5-character silent interval, with a ``0.005`` s floor for practical scheduling.
+- ``--modbus-backoff-base`` and ``--modbus-backoff-max`` control reconnect pacing after failures.
+- ``--modbus-max-connection-age`` can recycle a long-lived connection periodically; it is disabled by default.
+- On serial/RTU transports, the port remains reserved while ``modpoll`` runs. Stop ``modpoll`` before debugging the same port with another tool.
+- Transport exceptions raised during polling, MQTT get, or MQTT set close the Modbus connection and enter backoff immediately. Modbus exception responses returned by a device are counted as operation failures without forcing a reconnect.
+
 
 MQTT retain
 -----------
@@ -153,10 +187,21 @@ When ``--diagnostics-rate`` is greater than zero, ``modpoll`` periodically publi
     "mqtt_connected": true,
     "modbus_ok": true,
     "devices_failing": 1,
-    "last_cycle_s": 10.1
+    "last_cycle_s": 10.1,
+    "modbus_connection_state": "READY",
+    "modbus_connected": true,
+    "modbus_connected_since": 1760000000.0,
+    "modbus_last_success_at": 1760000010.0,
+    "modbus_last_failure_at": null,
+    "modbus_last_error": null,
+    "modbus_consecutive_failures": 0,
+    "modbus_backoff_until": null,
+    "modbus_connect_count": 1,
+    "modbus_reconnect_count": 0,
+    "modbus_transaction_failure_count": 0
   }
 
-Diagnostics retain follows ``--mqtt-retain`` (same as data topics). Diagnostics report operational health; they are not a substitute for ``modpoll/status`` presence. ``last_cycle_s`` is ``0`` until the first poll cycle completes.
+Diagnostics retain follows ``--mqtt-retain`` (same as data topics). Diagnostics report operational health; they are not a substitute for ``modpoll/status`` presence. ``last_cycle_s`` is ``0`` until the first poll cycle completes. ``modbus_ok`` reports whether the Modbus transport was available for all scheduled poll handlers in the latest cycle; per-device logical failures are reflected separately by ``devices_failing`` and device diagnostics. When Modbus is unavailable, ``modbus_connection_state``, ``modbus_last_error`` and ``modbus_backoff_until`` show whether the process is waiting before the next reconnect attempt.
 
 MQTT payload keys
 -----------------
@@ -221,7 +266,7 @@ Subscribe pattern (default): ``modpoll/+/get``. Publish to ``modpoll/{device}/ge
 - On partial failure, ``get_errors`` is incremented once per request (and ``get_success`` when there were no errors). ``get_unknown_refs`` and ``get_read_errors`` count individual skipped or failed references.
 - Multiple references in one request are read independently: known refs are returned even if others fail.
 - Reads use targeted Modbus requests (minimal register/coil count per reference), not a full poller block.
-- Uses the same connect/read/close pattern as MQTT writes (see ROADMAP B2 for a future persistent-connection optimization).
+- Uses the shared persistent Modbus connection; if the connection is in backoff, the request fails quickly and returns an empty response.
 
 **Breaking change (2.1.0+):** the ``ref``/``value`` object format is no longer supported; use a reference map instead.
 

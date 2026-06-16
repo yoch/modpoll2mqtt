@@ -5,9 +5,61 @@ from . import __version__
 _CSV_DELIMITER_CHOICES = ("comma", "tab")
 _MQTT_KEYS_CHOICES = ("name-with-unit", "name-only")
 
+_INTERVAL_DEFAULT_TCP = 0.0
+_INTERVAL_DEFAULT_UDP = 0.0
+_RTU_BITS_PER_CHARACTER = 11
+_RTU_FRAME_GAP_CHARACTERS = 3.5
+_RTU_MIN_AUTO_INTERVAL = 0.005
+
+
+def _default_rtu_interval(serial_baud: int) -> float:
+    if serial_baud <= 0:
+        return _RTU_MIN_AUTO_INTERVAL
+    frame_gap = _RTU_FRAME_GAP_CHARACTERS * _RTU_BITS_PER_CHARACTER / serial_baud
+    return max(frame_gap, _RTU_MIN_AUTO_INTERVAL)
+
+
+def _default_interval_for_transport(args) -> float:
+    if args.serial:
+        return _default_rtu_interval(args.serial_baud)
+    if args.udp:
+        return _INTERVAL_DEFAULT_UDP
+    return _INTERVAL_DEFAULT_TCP
+
+
+class ModpollArgumentParser(argparse.ArgumentParser):
+    def parse_args(self, args=None, namespace=None):
+        parsed = super().parse_args(args, namespace)
+        return self._validate_timing_options(parsed)
+
+    def parse_known_args(self, args=None, namespace=None):
+        parsed, extras = super().parse_known_args(args, namespace)
+        return self._validate_timing_options(parsed), extras
+
+    def _validate_timing_options(self, parsed):
+        if parsed.serial_baud <= 0:
+            self.error("--serial-baud must be greater than 0")
+        if parsed.interval is None:
+            parsed.interval = _default_interval_for_transport(parsed)
+        if parsed.interval < 0:
+            self.error("--interval must be greater than or equal to 0")
+        if parsed.modbus_backoff_base < 0:
+            self.error("--modbus-backoff-base must be greater than or equal to 0")
+        if parsed.modbus_backoff_max < parsed.modbus_backoff_base:
+            self.error(
+                "--modbus-backoff-max must be greater than or equal to "
+                "--modbus-backoff-base"
+            )
+        if (
+            parsed.modbus_max_connection_age is not None
+            and parsed.modbus_max_connection_age <= 0
+        ):
+            self.error("--modbus-max-connection-age must be greater than 0")
+        return parsed
+
 
 def get_parser():
-    parser = argparse.ArgumentParser(
+    parser = ModpollArgumentParser(
         description=f"modpoll2mqtt v{__version__} - Modbus to MQTT gateway"
     )
     parser.add_argument(
@@ -50,8 +102,12 @@ def get_parser():
     parser.add_argument(
         "--interval",
         type=float,
-        default=0.5,
-        help="The time interval in seconds between two polling, Defaults to 0.5",
+        default=None,
+        help=(
+            "Delay in seconds between pollers. Defaults automatically by transport: "
+            "0.0 for TCP/UDP, or the RTU frame gap derived from --serial-baud "
+            "with a 0.005s floor for serial/RTU"
+        ),
     )
     parser.add_argument(
         "--tcp", help="Act as a Modbus TCP master, connecting to host TCP"
@@ -92,6 +148,24 @@ def get_parser():
         type=float,
         default=3.0,
         help="Response time-out seconds for MODBUS devices, Defaults to 3.0",
+    )
+    parser.add_argument(
+        "--modbus-backoff-base",
+        type=float,
+        default=1.0,
+        help="Initial Modbus reconnect backoff in seconds. Defaults to 1.0",
+    )
+    parser.add_argument(
+        "--modbus-backoff-max",
+        type=float,
+        default=60.0,
+        help="Maximum Modbus reconnect backoff in seconds. Defaults to 60.0",
+    )
+    parser.add_argument(
+        "--modbus-max-connection-age",
+        type=float,
+        default=None,
+        help="Maximum age in seconds for a persistent Modbus connection before recycling. Disabled by default",
     )
     parser.add_argument(
         "-o",

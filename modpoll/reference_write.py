@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from pymodbus.exceptions import ModbusException
-
 from .reference_common import (
     call_with_device_id as _call_with_device_id,
     find_device as _find_device,
@@ -85,94 +83,72 @@ def write_reference(
 
 
 def _write_coil(handler: "ModbusHandler", dev: "Device", address: int, value) -> bool:
-    try:
-        result = _call_with_device_id(
-            handler.modbus_client.write_coil,
-            address,
-            value,
-            device_id=dev.devid,
-        )
-        return result is not None and not result.isError()
-    except ModbusException as e:
-        handler.logger.error(f"Error writing coil: {e}")
-        return False
+    result = _call_with_device_id(
+        handler.modbus_client.write_coil,
+        address,
+        value,
+        device_id=dev.devid,
+    )
+    return result is not None and not result.isError()
 
 
 def _write_coils(handler: "ModbusHandler", dev: "Device", address: int, values) -> bool:
-    try:
-        result = _call_with_device_id(
-            handler.modbus_client.write_coils,
-            address,
-            values,
-            device_id=dev.devid,
-        )
-        return result is not None and not result.isError()
-    except ModbusException as e:
-        handler.logger.error(f"Error writing coils: {e}")
-        return False
+    result = _call_with_device_id(
+        handler.modbus_client.write_coils,
+        address,
+        values,
+        device_id=dev.devid,
+    )
+    return result is not None and not result.isError()
 
 
 def _write_register(
     handler: "ModbusHandler", dev: "Device", address: int, value: int
 ) -> bool:
-    try:
-        result = _call_with_device_id(
-            handler.modbus_client.write_register,
-            address,
-            value,
-            device_id=dev.devid,
-        )
-        return result is not None and not result.isError()
-    except ModbusException as e:
-        handler.logger.error(f"Error writing register: {e}")
-        return False
+    result = _call_with_device_id(
+        handler.modbus_client.write_register,
+        address,
+        value,
+        device_id=dev.devid,
+    )
+    return result is not None and not result.isError()
 
 
 def _write_registers(
     handler: "ModbusHandler", dev: "Device", address: int, values
 ) -> bool:
-    try:
-        result = _call_with_device_id(
-            handler.modbus_client.write_registers,
-            address,
-            values,
-            device_id=dev.devid,
-        )
-        return result is not None and not result.isError()
-    except ModbusException as e:
-        handler.logger.error(f"Error writing registers: {e}")
-        return False
+    result = _call_with_device_id(
+        handler.modbus_client.write_registers,
+        address,
+        values,
+        device_id=dev.devid,
+    )
+    return result is not None and not result.isError()
 
 
 def _read_coils(handler: "ModbusHandler", dev: "Device", address: int, count: int):
-    try:
-        result = _call_with_device_id(
-            handler.modbus_client.read_coils,
-            address,
-            count=count,
-            device_id=dev.devid,
-        )
-        if result is not None and not result.isError():
-            return result.bits
-    except ModbusException as e:
-        handler.logger.error(f"Error reading coils: {e}")
+    result = _call_with_device_id(
+        handler.modbus_client.read_coils,
+        address,
+        count=count,
+        device_id=dev.devid,
+    )
+    if result is not None and not result.isError():
+        return result.bits
     return None
 
 
 def _read_holding_registers(
     handler: "ModbusHandler", dev: "Device", address: int, count: int
 ):
-    try:
-        result = _call_with_device_id(
-            handler.modbus_client.read_holding_registers,
-            address,
-            count=count,
-            device_id=dev.devid,
-        )
-        if result is not None and not result.isError():
-            return result.registers
-    except ModbusException as e:
-        handler.logger.error(f"Error reading holding registers: {e}")
+    result = _call_with_device_id(
+        handler.modbus_client.read_holding_registers,
+        address,
+        count=count,
+        device_id=dev.devid,
+    )
+    if result is not None and not result.isError():
+        return result.registers
     return None
 
 

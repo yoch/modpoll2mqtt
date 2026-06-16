@@ -3,13 +3,13 @@ import logging
 import re
 import signal
 import sys
+from functools import partial
 
 from .arg_parser import get_parser
 from .mqtt_task import MqttHandler
+from .modbus_connection import ModbusConnectionManager
 from .modbus_task import (
     setup_modbus_handlers,
-    modbus_connect,
-    modbus_close,
     publish_global_diagnostics,
     format_mqtt_payload_values,
 )
@@ -155,6 +155,13 @@ def app(name="modpoll"):
             mqtt_handler.close()
         exit(1)
 
+    connection_manager = ModbusConnectionManager(
+        modbus_client,
+        backoff_base=args.modbus_backoff_base,
+        backoff_max=args.modbus_backoff_max,
+        max_connection_age=args.modbus_max_connection_age,
+    )
+
     # main loop
     last_check = 0
     last_diag = 0
@@ -172,19 +179,16 @@ def app(name="modpoll"):
             logger.info(
                 f" === Modpoll is polling at rate:{args.rate}s, actual:{elapsed}s ==="
             )
-            modbus_ok = modbus_connect(modbus_client)
-            last_modbus_ok = modbus_ok
-            if not modbus_ok:
-                for modbus_handler in modbus_handlers:
-                    modbus_handler.on_connect_failure()
-            else:
-                try:
-                    for modbus_handler in modbus_handlers:
-                        modbus_handler.poll()
-                        if on_threading_event():
-                            break
-                finally:
-                    modbus_close(modbus_client)
+            last_modbus_ok = True
+            for modbus_handler in modbus_handlers:
+                result = connection_manager.execute("poll", modbus_handler.poll)
+                if not result.ok:
+                    last_modbus_ok = False
+                    logger.error(f"Modbus poll skipped or failed: {result.error}")
+                    if not result.callback_started:
+                        modbus_handler.on_poll_unavailable()
+                if on_threading_event():
+                    break
             for modbus_handler in modbus_handlers:
                 if on_threading_event():
                     break
@@ -205,7 +209,11 @@ def app(name="modpoll"):
                 modbus_handler.publish_diagnostics()
             if mqtt_handler:
                 publish_global_diagnostics(
-                    mqtt_handler, modbus_handlers, last_modbus_ok, last_cycle_s
+                    mqtt_handler,
+                    modbus_handlers,
+                    last_modbus_ok,
+                    last_cycle_s,
+                    connection_manager.diagnostics(),
                 )
         if on_threading_event():
             break
@@ -251,39 +259,48 @@ def app(name="modpoll"):
                         continue
                     device_found = True
                     if kind == "set":
-                        if not modbus_connect(modbus_client):
+                        result = connection_manager.execute(
+                            "write",
+                            partial(
+                                modbus_handler.write_references, device_name, command
+                            ),
+                        )
+                        if not result.ok:
                             logger.error(
-                                f"Modbus connect failed for write: device={device_name}"
+                                f"Modbus write failed or unavailable: device={device_name}, error={result.error}"
                             )
-                            modbus_handler.record_set_connect_failure(device_name)
-                        else:
-                            try:
-                                modbus_handler.write_references(device_name, command)
-                            finally:
-                                modbus_close(modbus_client)
+                            if result.callback_started:
+                                modbus_handler.record_set_transport_failure(device_name)
+                            else:
+                                modbus_handler.record_set_unavailable(device_name)
                     else:
                         ref_names = list(command.keys())
                         response_topic = mqtt_get_response_topic(
                             args.mqtt_get_topic_pattern,
                             device_name,
                         )
-                        if not modbus_connect(modbus_client):
+                        result = connection_manager.execute(
+                            "get",
+                            partial(
+                                modbus_handler.read_references, device_name, ref_names
+                            ),
+                        )
+                        if not result.ok:
                             logger.error(
-                                f"Modbus connect failed for get: device={device_name}"
+                                f"Modbus get failed or unavailable: device={device_name}, error={result.error}"
                             )
-                            modbus_handler.record_get_connect_failure(device_name)
+                            if result.callback_started:
+                                modbus_handler.record_get_transport_failure(
+                                    device_name, len(ref_names)
+                                )
+                            else:
+                                modbus_handler.record_get_unavailable(device_name)
                             mqtt_handler.publish_data_message(response_topic, "{}")
                         else:
-                            try:
-                                result = modbus_handler.read_references(
-                                    device_name, ref_names
-                                )
-                                mqtt_handler.publish_data_message(
-                                    response_topic,
-                                    json.dumps(format_mqtt_payload_values(result)),
-                                )
-                            finally:
-                                modbus_close(modbus_client)
+                            mqtt_handler.publish_data_message(
+                                response_topic,
+                                json.dumps(format_mqtt_payload_values(result.value)),
+                            )
                     break
 
                 if not device_found:
@@ -295,7 +312,7 @@ def app(name="modpoll"):
         remaining = last_check + args.rate - get_utc_time()
         delay_thread(min(max(remaining, 0.01), 0.5))
 
-    modbus_close(modbus_client)
+    connection_manager.close("shutdown")
     if mqtt_handler:
         mqtt_handler.close()
 

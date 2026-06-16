@@ -23,9 +23,6 @@ from .mqtt_task import MqttHandler
 FLOAT_TYPE_PRECISION = 3
 MODBUS_WRITE_INTERVAL = 0.1
 MQTT_GLOBAL_DIAGNOSTICS_TOPIC = "modpoll/diagnostics"
-_MODBUS_BACKOFF_BASE = 1.0
-_MODBUS_BACKOFF_MAX = 60.0
-_modbus_connect_failures = 0
 CONFIG_DEVICE_COL_MIN = 3
 CONFIG_POLL_COL_MIN = 5
 CONFIG_REF_COL_MIN = 5
@@ -147,70 +144,63 @@ class Poller:
         self.logger = logging.getLogger(__name__)
 
     def poll(self, master) -> bool:
-        try:
-            result = None
-            data = None
+        result = None
+        data = None
 
-            def _call_read(method):
-                return _call_with_device_id(
-                    method,
-                    self.start_address,
-                    count=self.size,
-                    device_id=self.device.devid,
-                )
-
-            if self.fc == 1:
-                result = _call_read(master.read_coils)
-            elif self.fc == 2:
-                result = _call_read(master.read_discrete_inputs)
-            elif self.fc == 3:
-                result = _call_read(master.read_holding_registers)
-            elif self.fc == 4:
-                result = _call_read(master.read_input_registers)
-
-            if result is not None and not result.isError():
-                if self.fc in (1, 2):
-                    bits = result.bits
-                    sorted_refs = sorted(
-                        self.readableReferences, key=lambda r: r.address
-                    )
-                    for ref in sorted_refs:
-                        try:
-                            value = self.decode_coil_bits(ref, bits, self.start_address)
-                            ref.update_value(value)
-                        except IndexError:
-                            self.logger.error(
-                                f"Reference {ref.name} address {ref.address} is outside "
-                                f"of poller range starting at {self.start_address}"
-                            )
-                        except Exception:
-                            self.logger.error(
-                                f"Failed to decode value for reference: {ref.name}"
-                            )
-                else:  # Function codes 3 and 4
-                    data = result.registers
-                    # Sort refs by address to ensure predictable decoding order
-                    sorted_refs = sorted(
-                        self.readableReferences, key=lambda r: r.address
-                    )
-                    for ref in sorted_refs:
-                        try:
-                            ref.update_value(
-                                self.decode_register_block(
-                                    ref, data, self.start_address
-                                )
-                            )
-                        except Exception as e:
-                            self.logger.error(
-                                f"Failed to decode value for reference: {ref.name} - {e}"
-                            )
-                self.update_statistics(True)
-                return True
-        except (ModbusException, OSError) as e:
-            self.logger.error(
-                f"Modbus poll error: {self.device.name} {self.fc} "
-                f"{self.start_address} {self.size} - {e}"
+        def _call_read(method):
+            return _call_with_device_id(
+                method,
+                self.start_address,
+                count=self.size,
+                device_id=self.device.devid,
             )
+
+        if self.fc == 1:
+            result = _call_read(master.read_coils)
+        elif self.fc == 2:
+            result = _call_read(master.read_discrete_inputs)
+        elif self.fc == 3:
+            result = _call_read(master.read_holding_registers)
+        elif self.fc == 4:
+            result = _call_read(master.read_input_registers)
+
+        if result is not None and not result.isError():
+            if self.fc in (1, 2):
+                bits = result.bits
+                sorted_refs = sorted(
+                    self.readableReferences, key=lambda r: r.address
+                )
+                for ref in sorted_refs:
+                    try:
+                        value = self.decode_coil_bits(ref, bits, self.start_address)
+                        ref.update_value(value)
+                    except IndexError:
+                        self.logger.error(
+                            f"Reference {ref.name} address {ref.address} is outside "
+                            f"of poller range starting at {self.start_address}"
+                        )
+                    except Exception:
+                        self.logger.error(
+                            f"Failed to decode value for reference: {ref.name}"
+                        )
+            else:
+                data = result.registers
+                sorted_refs = sorted(
+                    self.readableReferences, key=lambda r: r.address
+                )
+                for ref in sorted_refs:
+                    try:
+                        ref.update_value(
+                            self.decode_register_block(
+                                ref, data, self.start_address
+                            )
+                        )
+                    except Exception as e:
+                        self.logger.error(
+                            f"Failed to decode value for reference: {ref.name} - {e}"
+                        )
+            self.update_statistics(True)
+            return True
 
         self.update_statistics(False)
         for ref in self.readableReferences:
@@ -407,7 +397,7 @@ class ModbusHandler:
         config_file: str,
         mqtt_handler: Optional[MqttHandler] = None,
         timeout: float = 3.0,
-        interval: float = 0.5,
+        interval: float = 0.0,
         no_output: bool = False,
         mqtt_publish_topic_pattern: Optional[str] = None,
         mqtt_diagnostics_topic_pattern: Optional[str] = None,
@@ -670,23 +660,33 @@ class ModbusHandler:
                     p.update_statistics(False)
                     self._maybe_disable_poller(dev, p)
 
-    def on_connect_failure(self):
+    def on_poll_unavailable(self):
         self._begin_poll_cycle()
         self._record_poll_failure()
 
-    def poll(self):
+    def poll(self) -> bool:
+        any_success = False
         self._begin_poll_cycle()
         for dev in self.deviceList:
             self.logger.debug(f"Polling device {dev.name} ...")
             for p in dev.pollerList:
                 if not p.disabled:
-                    p.poll(self.modbus_client)
+                    try:
+                        if p.poll(self.modbus_client):
+                            any_success = True
+                    except (ModbusException, OSError):
+                        p.update_statistics(False)
+                        for ref in p.readableReferences:
+                            ref.update_value(None)
+                        self._maybe_disable_poller(dev, p)
+                        raise
                     self._maybe_disable_poller(dev, p)
                     if on_threading_event():
-                        return
+                        return any_success
                     delay_thread(timeout=self.interval)
         if not self.no_output:
             self.print_results()
+        return any_success
 
     def has_device(self, device_name: str) -> bool:
         return any(d.name == device_name for d in self.deviceList)
@@ -759,16 +759,29 @@ class ModbusHandler:
             dev.getSuccess += 1
         return values
 
-    def record_get_connect_failure(self, device_name: str) -> None:
+    def record_get_unavailable(self, device_name: str) -> None:
         dev = _find_device(self, device_name)
         if dev is not None:
             dev.getCount += 1
             dev.getErrors += 1
 
-    def record_set_connect_failure(self, device_name: str) -> None:
+    def record_get_transport_failure(
+        self, device_name: str, failed_ref_count: int = 1
+    ) -> None:
+        dev = _find_device(self, device_name)
+        if dev is not None:
+            dev.getErrors += 1
+            dev.getReadErrors += max(failed_ref_count, 1)
+
+    def record_set_unavailable(self, device_name: str) -> None:
         dev = _find_device(self, device_name)
         if dev is not None:
             dev.setCount += 1
+            dev.setErrors += 1
+
+    def record_set_transport_failure(self, device_name: str) -> None:
+        dev = _find_device(self, device_name)
+        if dev is not None:
             dev.setErrors += 1
 
     def print_results(self):
@@ -895,6 +908,7 @@ def publish_global_diagnostics(
     modbus_handlers: List[ModbusHandler],
     modbus_ok: bool,
     last_cycle_s: float,
+    connection_diagnostics: Optional[dict] = None,
 ) -> None:
     payload = {
         "mqtt_connected": mqtt_handler.is_connected(),
@@ -902,41 +916,13 @@ def publish_global_diagnostics(
         "devices_failing": count_devices_failing(modbus_handlers),
         "last_cycle_s": last_cycle_s,
     }
+    if connection_diagnostics:
+        payload.update(connection_diagnostics)
     mqtt_handler.publish(
         MQTT_GLOBAL_DIAGNOSTICS_TOPIC,
         json.dumps(payload),
         retain=mqtt_handler.retain_data_publishes,
     )
-
-
-def modbus_connect(client) -> bool:
-    global _modbus_connect_failures
-    if _modbus_connect_failures > 0:
-        delay = min(
-            _MODBUS_BACKOFF_BASE * 2 ** (_modbus_connect_failures - 1),
-            _MODBUS_BACKOFF_MAX,
-        )
-        delay_thread(delay)
-    try:
-        ok = client.connect()
-    except (ModbusException, OSError) as e:
-        logging.getLogger(__name__).error(f"Modbus connect failed: {e}")
-        ok = False
-    if ok:
-        _modbus_connect_failures = 0
-    else:
-        _modbus_connect_failures += 1
-    return ok
-
-
-def modbus_close(client) -> None:
-    if client:
-        try:
-            client.close()
-        except (ModbusException, OSError) as e:
-            logging.getLogger(__name__).debug(
-                f"Ignoring Modbus close error during shutdown: {e}"
-            )
 
 
 def setup_modbus_handlers(args, mqtt_handler: Optional[MqttHandler] = None):

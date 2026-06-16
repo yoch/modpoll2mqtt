@@ -1,6 +1,7 @@
 import pytest  # type: ignore
 from modpoll.arg_parser import get_parser
-from modpoll.modbus_task import setup_modbus_handlers, modbus_connect, modbus_close
+from modpoll.modbus_connection import ModbusConnectionManager
+from modpoll.modbus_task import setup_modbus_handlers
 
 from tests.modbus_integration import ModbusEndpoint
 
@@ -39,12 +40,11 @@ def test_modbus_task_poll_modsim(modbus_test_endpoint):
     modbus_client, modbus_handlers = setup_modbus_handlers(args)
     modbus_handler = modbus_handlers[0]
 
-    assert modbus_connect(modbus_client)
-
+    manager = ModbusConnectionManager(modbus_client)
     try:
-        modbus_handler.poll()
+        assert manager.execute("poll", modbus_handler.poll).ok is True
     finally:
-        modbus_close(modbus_client)
+        manager.close("test")
 
     assert len(modbus_handler.deviceList) > 0
     assert len(modbus_handler.deviceList[0].references) > 0

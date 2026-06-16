@@ -249,6 +249,7 @@ $RECYCLE.BIN/
 # End of https://www.toptal.com/developers/gitignore/api/python,dotenv,linux,macos,windows
 
 # Notes de travail locales (non versionnées)
+ROADMAP.md
 NOTES-MQTT-lecture-ecriture.md
 
 examples/CTA/

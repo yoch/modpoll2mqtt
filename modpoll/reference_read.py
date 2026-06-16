@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Dict, List, Tuple
 
-from pymodbus.exceptions import ModbusException
-
 from .reference_common import (
     call_with_device_id,
     find_poller_for_ref,
@@ -64,7 +62,7 @@ def read_references(
                 continue
             ref.update_value(value)
             values[ref_name] = ref.val
-        except (ModbusException, OSError, ValueError, IndexError) as e:
+        except (ValueError, IndexError) as e:
             handler.logger.error(
                 f"Modbus read error for reference '{ref_name}' on device {dev.name}: {e}"
             )
@@ -157,68 +155,56 @@ def _coil_read_params(ref: "Reference", poller: "Poller") -> Tuple[int, int]:
 
 
 def _read_coils(handler: "ModbusHandler", dev: "Device", address: int, count: int):
-    try:
-        result = call_with_device_id(
-            handler.modbus_client.read_coils,
-            address,
-            count=count,
-            device_id=dev.devid,
-        )
-        if result is not None and not result.isError():
-            return result.bits
-    except ModbusException as e:
-        handler.logger.error(f"Error reading coils: {e}")
+    result = call_with_device_id(
+        handler.modbus_client.read_coils,
+        address,
+        count=count,
+        device_id=dev.devid,
+    )
+    if result is not None and not result.isError():
+        return result.bits
     return None
 
 
 def _read_discrete_inputs(
     handler: "ModbusHandler", dev: "Device", address: int, count: int
 ):
-    try:
-        result = call_with_device_id(
-            handler.modbus_client.read_discrete_inputs,
-            address,
-            count=count,
-            device_id=dev.devid,
-        )
-        if result is not None and not result.isError():
-            return result.bits
-    except ModbusException as e:
-        handler.logger.error(f"Error reading discrete inputs: {e}")
+    result = call_with_device_id(
+        handler.modbus_client.read_discrete_inputs,
+        address,
+        count=count,
+        device_id=dev.devid,
+    )
+    if result is not None and not result.isError():
+        return result.bits
     return None
 
 
 def _read_holding_registers(
     handler: "ModbusHandler", dev: "Device", address: int, count: int
 ):
-    try:
-        result = call_with_device_id(
-            handler.modbus_client.read_holding_registers,
-            address,
-            count=count,
-            device_id=dev.devid,
-        )
-        if result is not None and not result.isError():
-            return result.registers
-    except ModbusException as e:
-        handler.logger.error(f"Error reading holding registers: {e}")
+    result = call_with_device_id(
+        handler.modbus_client.read_holding_registers,
+        address,
+        count=count,
+        device_id=dev.devid,
+    )
+    if result is not None and not result.isError():
+        return result.registers
     return None
 
 
 def _read_input_registers(
     handler: "ModbusHandler", dev: "Device", address: int, count: int
 ):
-    try:
-        result = call_with_device_id(
-            handler.modbus_client.read_input_registers,
-            address,
-            count=count,
-            device_id=dev.devid,
-        )
-        if result is not None and not result.isError():
-            return result.registers
-    except ModbusException as e:
-        handler.logger.error(f"Error reading input registers: {e}")
+    result = call_with_device_id(
+        handler.modbus_client.read_input_registers,
+        address,
+        count=count,
+        device_id=dev.devid,
+    )
+    if result is not None and not result.isError():
+        return result.registers
     return None
 
 
