@@ -21,7 +21,6 @@ from .utils import on_threading_event, delay_thread
 from .mqtt_task import MqttHandler
 
 FLOAT_TYPE_PRECISION = 3
-MODBUS_WRITE_INTERVAL = 0.1
 MQTT_GLOBAL_DIAGNOSTICS_TOPIC = "modpoll/diagnostics"
 CONFIG_DEVICE_COL_MIN = 3
 CONFIG_POLL_COL_MIN = 5
@@ -698,8 +697,6 @@ class ModbusHandler:
         self,
         device_name: str,
         ref_values: dict,
-        *,
-        interval: float = MODBUS_WRITE_INTERVAL,
     ) -> None:
         dev = _find_device(self, device_name)
         if dev is None:
@@ -730,7 +727,7 @@ class ModbusHandler:
             if self.write_reference(device_name, ref_name, value):
                 ok_count += 1
             if i < len(writes) - 1:
-                delay_thread(interval)
+                delay_thread(timeout=self.interval)
 
         dev.setUnknownRefs += unknown_skips
         if unknown_skips or ok_count < len(writes):

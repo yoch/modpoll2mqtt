@@ -104,9 +104,10 @@ def get_parser():
         type=float,
         default=None,
         help=(
-            "Delay in seconds between pollers. Defaults automatically by transport: "
-            "0.0 for TCP/UDP, or the RTU frame gap derived from --serial-baud "
-            "with a 0.005s floor for serial/RTU"
+            "Delay in seconds between pollers and between references in one MQTT "
+            "set message. Defaults automatically by transport: 0.0 for TCP/UDP, or "
+            "the RTU frame gap derived from --serial-baud with a 0.005s floor for "
+            "serial/RTU"
         ),
     )
     parser.add_argument(

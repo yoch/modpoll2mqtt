@@ -62,7 +62,7 @@ Operational flags
 
 - ``--no-output`` suppresses poll result tables on stdout (replaces the former ``--daemon`` / ``-d`` flag; does not fork).
 - ``--delay`` waits N seconds after connecting before the first Modbus poll.
-- ``--interval`` waits between pollers. If omitted, the default is transport-aware: ``0.0`` seconds for TCP/UDP; for serial/RTU it is derived from ``--serial-baud`` using the Modbus RTU 3.5-character silent interval with a practical ``0.005`` s floor. Set it explicitly for slow devices that need extra settling time.
+- ``--interval`` waits between pollers and between successive references in a single MQTT write command. If omitted, the default is transport-aware: ``0.0`` seconds for TCP/UDP; for serial/RTU it is derived from ``--serial-baud`` using the Modbus RTU 3.5-character silent interval with a practical ``0.005`` s floor. Set it explicitly for slow devices that need extra settling time.
 
 Default serial/RTU examples:
 
@@ -120,7 +120,7 @@ Persistent Modbus connection
 Operational notes:
 
 - ``--timeout`` still bounds individual Modbus operations at the pymodbus client level.
-- ``--interval`` defaults to ``0.0`` on TCP/UDP so persistent connections are not hidden behind an artificial 0.5 s poller delay. Serial/RTU derives its default from ``--serial-baud`` using the Modbus RTU 3.5-character silent interval, with a ``0.005`` s floor for practical scheduling.
+- ``--interval`` defaults to ``0.0`` on TCP/UDP so persistent connections are not hidden behind an artificial 0.5 s poller delay. Serial/RTU derives its default from ``--serial-baud`` using the Modbus RTU 3.5-character silent interval, with a ``0.005`` s floor for practical scheduling. The same delay is used between pollers in a poll cycle and between references in one MQTT ``set`` message.
 - ``--modbus-backoff-base`` and ``--modbus-backoff-max`` control reconnect pacing after failures.
 - ``--modbus-max-connection-age`` can recycle a long-lived connection periodically; it is disabled by default.
 - On serial/RTU transports, the port remains reserved while ``modpoll`` runs. Stop ``modpoll`` before debugging the same port with another tool.
