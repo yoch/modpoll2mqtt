@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [2.2.1](https://github.com/yoch/modpoll2mqtt/compare/v2.2.0...v2.2.1) (2026-06-16)
+
+### Internal
+
+* add strict static typing with basedpyright across `modpoll/`; introduce `modpoll/types.py` and enforce `make typecheck` in local and CI quality gates
+* extract `Device`, `Poller`, and `Reference` into `modpoll/modbus_models.py` (orchestration remains in `modbus_task.py`)
+* replace black with ruff for format and lint
+
+### Documentation
+
+* add typing audit baseline in `docs/typing-audit.md`
+* extend contributor release checklist and harden the `on-release-main` workflow
+
+### Tests
+
+* import device models from `modpoll.modbus_models` in unit tests
+
 ## [2.2.0](https://github.com/yoch/modpoll2mqtt/compare/v2.1.2...v2.2.0) (2026-06-16)
 
 ### Features

@@ -1,6 +1,6 @@
 [project]
 name = "modpoll2mqtt"
-version = "2.2.0"
+version = "2.2.1"
 description = "Modbus to MQTT gateway — fork of modpoll"
 authors = [{ name = "yoch", email = "yoch.melka@gmail.com" }]
 readme = "README.md"
