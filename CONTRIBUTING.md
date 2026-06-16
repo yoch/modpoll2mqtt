@@ -72,17 +72,22 @@ poetry config keyring.enabled false
 
 4. Don't forget to add test cases for your added functionality in the `tests` directory.
 
-5. **Before every commit**, run the same quality checks as CI (`ci-check` workflow in
-   [`.github/workflows/ci-check.yml`](.github/workflows/ci-check.yml)). A skipped `make check`
-   locally often means a red CI run (e.g. `black` reformatting `modpoll/modbus_task.py`).
+5. **Before every `git commit`** (not only before a release or pull request), run the
+   same quality checks as CI (`ci-check` workflow in
+   [`.github/workflows/ci-check.yml`](.github/workflows/ci-check.yml)):
 
     ```bash
     make check
     ```
 
+    This runs `black` among other tools. **Do not commit Python changes until
+    `make check` passes cleanly** — if `black` reformats files, stage those changes and
+    include them in the same commit. Committing first and amending afterward is a smell;
+    it usually means this step was skipped.
+
     `make install` registers pre-commit hooks that catch many issues at commit time, but
     they do not replace a full `make check` (deptry, poetry lock, etc.). Re-run
-    `make check` after fixing hook failures and before `git commit --amend`.
+    `make check` after fixing hook failures.
 
     Then, validate that all unit tests are passing:
 
@@ -113,9 +118,11 @@ poetry config keyring.enabled false
     Override endpoints with `MODBUS_TEST_HOST` / `MODBUS_TEST_PORT` or
     `MQTT_TEST_HOST` / `MQTT_TEST_PORT` when needed.
 
-6. Commit your changes and push your branch to GitHub:
+6. Commit your changes and push your branch to GitHub. Run `make check` again if you
+   changed files after the last successful run:
 
     ```bash
+    make check
     git add .
     git commit -m "Your detailed description of your changes."
     git push origin your-branch-name
@@ -130,8 +137,13 @@ poetry config keyring.enabled false
 PyPI publish and the public documentation site are **not** updated on ordinary pushes to `main`.
 They run only when:
 
-1. A **version tag** `vX.Y.Z` is pushed, or a **GitHub Release is published** — both trigger [`.github/workflows/on-release-main.yml`](.github/workflows/on-release-main.yml), or
+1. A **GitHub Release is published** — triggers [`.github/workflows/on-release-main.yml`](.github/workflows/on-release-main.yml)
+   (checks and tests run in that workflow before PyPI upload), or
 2. That workflow is started **manually** from the Actions tab (`workflow_dispatch`).
+
+Do **not** `git push origin vX.Y.Z` to trigger a release: that skips the CI gate and
+publishes before the GitHub Release exists (the README `release` badge reads from GitHub
+Releases, not bare tags).
 
 The workflow publishes the package to PyPI (trusted publisher / OIDC) and deploys Sphinx output to the `gh-pages` branch.
 
@@ -144,7 +156,8 @@ tagging a release.
 1. **`CHANGELOG.md`** — add or move entries under `[Unreleased]`; each new CLI
    flag introduced with `add \`--flag\`` in the Features section.
 2. **`docs/changelog.rst`** — regenerate from `CHANGELOG.md` (`make docs-changelog`
-   or `make docs`); commit the updated file with the release commit.
+   or `make docs`); commit the updated file with the release commit. The published
+   docs omit the empty `[Unreleased]` section (only versioned entries are included).
 3. **Narrative docs** — keep `README.md`, `docs/quickstart.rst`, and
    `docs/usage.rst` aligned with current behavior:
    - every new user-facing CLI flag is mentioned in at least one of these files;
@@ -177,17 +190,17 @@ tagging a release.
 # 3. complete the documentation checklist above
 make docs-changelog
 make ci
-git tag vX.Y.Z
-# after push + release workflow: verify https://yoch.github.io/modpoll2mqtt/changelog.html
 git push origin main
-git push origin vX.Y.Z
+# wait for ci-check and ci-test on main to pass
 gh release create vX.Y.Z --title "vX.Y.Z" --notes-file CHANGELOG-excerpt.md
+# release-main runs on the published release: checks → tests → PyPI → docs
+# then verify https://yoch.github.io/modpoll2mqtt/changelog.html
 ```
 
 **Manual re-run** (same version already on PyPI will fail at upload; use only to retry a failed docs deploy after fixing the workflow):
 
 ```bash
-gh workflow run release-main --repo yoch/modpoll2mqtt --ref main
+gh workflow run release-main --ref main
 ```
 
 CI on push runs two workflows — `ci-check` (lint + docs build) and `ci-test` — and does not deploy the site.

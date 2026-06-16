@@ -50,7 +50,10 @@ clean-build: ## clean build artifacts
 
 .PHONY: docs-changelog
 docs-changelog: ## Regenerate docs/changelog.rst from CHANGELOG.md
-	@awk '/<!-- end-docs-changelog -->/{exit} {print}' CHANGELOG.md | poetry run pandoc --from=markdown --to=rst -o docs/changelog.rst
+	@awk '/<!-- end-docs-changelog -->/{exit} \
+	      /^## \[Unreleased\]$$/{skip=1; next} \
+	      skip && /^## \[/ {skip=0} \
+	      !skip {print}' CHANGELOG.md | poetry run pandoc --from=markdown --to=rst -o docs/changelog.rst
 
 .PHONY: docs
 docs: docs-changelog ## Build docs into html files
