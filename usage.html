@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Basic Usage &mdash; modpoll2mqtt 2.1.2 documentation</title>
+  <title>Basic Usage &mdash; modpoll2mqtt 2.2.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=b3e23499"></script>
+      <script src="_static/documentation_options.js?v=b21de401"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -58,12 +58,15 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#framers-and-transports">Framers and transports</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#persistent-modbus-connection">Persistent Modbus connection</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#mqtt-retain">MQTT retain</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mqtt-status">MQTT status</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mqtt-diagnostics">MQTT diagnostics</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#mqtt-payload-keys">MQTT payload keys</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#mqtt-single-publish">MQTT single publish</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#mqtt-diagnostics">MQTT diagnostics</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#publish-behavior">Publish behavior</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#mqtt-write-commands">MQTT write commands</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mqtt-on-demand-read-get">MQTT on-demand read (get)</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="configure.html">Configuration</a></li>
@@ -96,18 +99,22 @@
              
   <section id="basic-usage">
 <h1>Basic Usage<a class="headerlink" href="#basic-usage" title="Link to this heading"></a></h1>
-<p><p>modpoll2mqtt v2.1.2 - Modbus to MQTT gateway</p>
+<p><p>modpoll2mqtt v2.2.0 - Modbus to MQTT gateway</p>
 </p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">usage</span><span class="p">:</span> <span class="n">modpoll</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">v</span><span class="p">]</span> <span class="o">-</span><span class="n">f</span> <span class="n">CONFIG</span> <span class="p">[</span><span class="n">CONFIG</span> <span class="o">...</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">csv</span><span class="o">-</span><span class="n">delimiter</span> <span class="p">{</span><span class="n">comma</span><span class="p">,</span><span class="n">tab</span><span class="p">}]</span>
                <span class="p">[</span><span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">output</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">r</span> <span class="n">RATE</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">interval</span> <span class="n">INTERVAL</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">tcp</span> <span class="n">TCP</span><span class="p">]</span>
                <span class="p">[</span><span class="o">--</span><span class="n">tcp</span><span class="o">-</span><span class="n">port</span> <span class="n">TCP_PORT</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">udp</span> <span class="n">UDP</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">udp</span><span class="o">-</span><span class="n">port</span> <span class="n">UDP_PORT</span><span class="p">]</span>
                <span class="p">[</span><span class="o">--</span><span class="n">serial</span> <span class="n">SERIAL</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">serial</span><span class="o">-</span><span class="n">baud</span> <span class="n">SERIAL_BAUD</span><span class="p">]</span>
                <span class="p">[</span><span class="o">--</span><span class="n">serial</span><span class="o">-</span><span class="n">parity</span> <span class="p">{</span><span class="n">none</span><span class="p">,</span><span class="n">odd</span><span class="p">,</span><span class="n">even</span><span class="p">}]</span> <span class="p">[</span><span class="o">--</span><span class="n">timeout</span> <span class="n">TIMEOUT</span><span class="p">]</span>
+               <span class="p">[</span><span class="o">--</span><span class="n">modbus</span><span class="o">-</span><span class="n">backoff</span><span class="o">-</span><span class="n">base</span> <span class="n">MODBUS_BACKOFF_BASE</span><span class="p">]</span>
+               <span class="p">[</span><span class="o">--</span><span class="n">modbus</span><span class="o">-</span><span class="n">backoff</span><span class="o">-</span><span class="nb">max</span> <span class="n">MODBUS_BACKOFF_MAX</span><span class="p">]</span>
+               <span class="p">[</span><span class="o">--</span><span class="n">modbus</span><span class="o">-</span><span class="nb">max</span><span class="o">-</span><span class="n">connection</span><span class="o">-</span><span class="n">age</span> <span class="n">MODBUS_MAX_CONNECTION_AGE</span><span class="p">]</span>
                <span class="p">[</span><span class="o">-</span><span class="n">o</span> <span class="n">EXPORT</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">version</span> <span class="p">{</span><span class="mf">3.1.1</span><span class="p">,</span><span class="mf">5.0</span><span class="p">}]</span>
                <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">host</span> <span class="n">MQTT_HOST</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">port</span> <span class="n">MQTT_PORT</span><span class="p">]</span>
                <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">clientid</span> <span class="n">MQTT_CLIENTID</span><span class="p">]</span>
                <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">publish</span><span class="o">-</span><span class="n">topic</span><span class="o">-</span><span class="n">pattern</span> <span class="n">MQTT_PUBLISH_TOPIC_PATTERN</span><span class="p">]</span>
                <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">subscribe</span><span class="o">-</span><span class="n">topic</span><span class="o">-</span><span class="n">pattern</span> <span class="n">MQTT_SUBSCRIBE_TOPIC_PATTERN</span><span class="p">]</span>
+               <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">get</span><span class="o">-</span><span class="n">topic</span><span class="o">-</span><span class="n">pattern</span> <span class="n">MQTT_GET_TOPIC_PATTERN</span><span class="p">]</span>
                <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">diagnostics</span><span class="o">-</span><span class="n">topic</span><span class="o">-</span><span class="n">pattern</span> <span class="n">MQTT_DIAGNOSTICS_TOPIC_PATTERN</span><span class="p">]</span>
                <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">qos</span> <span class="p">{</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">}]</span> <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">rx</span><span class="o">-</span><span class="n">queue</span><span class="o">-</span><span class="n">size</span> <span class="n">N</span><span class="p">]</span>
                <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">user</span> <span class="n">MQTT_USER</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="k">pass</span> <span class="n">MQTT_PASS</span><span class="p">]</span>
@@ -147,8 +154,7 @@
 <p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
 </dd>
 <dt><kbd>--interval</kbd></dt>
-<dd><p>The time interval in seconds between two polling, Defaults to 0.5</p>
-<p>Default: <code class="docutils literal notranslate"><span class="pre">0.5</span></code></p>
+<dd><p>Delay in seconds between pollers and between references in one MQTT set message. Defaults automatically by transport: 0.0 for TCP/UDP, or the RTU frame gap derived from –serial-baud with a 0.005s floor for serial/RTU</p>
 </dd>
 <dt><kbd>--tcp</kbd></dt>
 <dd><p>Act as a Modbus TCP master, connecting to host TCP</p>
@@ -180,6 +186,17 @@
 <dd><p>Response time-out seconds for MODBUS devices, Defaults to 3.0</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">3.0</span></code></p>
 </dd>
+<dt><kbd>--modbus-backoff-base</kbd></dt>
+<dd><p>Initial Modbus reconnect backoff in seconds. Defaults to 1.0</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">1.0</span></code></p>
+</dd>
+<dt><kbd>--modbus-backoff-max</kbd></dt>
+<dd><p>Maximum Modbus reconnect backoff in seconds. Defaults to 60.0</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">60.0</span></code></p>
+</dd>
+<dt><kbd>--modbus-max-connection-age</kbd></dt>
+<dd><p>Maximum age in seconds for a persistent Modbus connection before recycling. Disabled by default</p>
+</dd>
 <dt><kbd>-o, --export</kbd></dt>
 <dd><p>The file name to export references/registers</p>
 </dd>
@@ -205,6 +222,10 @@
 <dt><kbd>--mqtt-subscribe-topic-pattern</kbd></dt>
 <dd><p>Topic pattern for MQTT write commands. Use + as placeholder for device name. Defaults to “modpoll/+/set”</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">'modpoll/+/set'</span></code></p>
+</dd>
+<dt><kbd>--mqtt-get-topic-pattern</kbd></dt>
+<dd><p>Topic pattern for MQTT on-demand read commands. Use + as placeholder for device name. Defaults to “modpoll/+/get”</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'modpoll/+/get'</span></code></p>
 </dd>
 <dt><kbd>--mqtt-diagnostics-topic-pattern</kbd></dt>
 <dd><p>Topic pattern for MQTT diagnostics. Use {{device_name}} as placeholder for the device names in Modbus config. Defaults to modpoll/{{device_name}}/diagnostics</p>
@@ -330,7 +351,33 @@
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">--no-output</span></code> suppresses poll result tables on stdout (replaces the former <code class="docutils literal notranslate"><span class="pre">--daemon</span></code> / <code class="docutils literal notranslate"><span class="pre">-d</span></code> flag; does not fork).</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--delay</span></code> waits N seconds after connecting before the first Modbus poll.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--interval</span></code> waits between pollers and between successive references in a single MQTT write command. If omitted, the default is transport-aware: <code class="docutils literal notranslate"><span class="pre">0.0</span></code> seconds for TCP/UDP; for serial/RTU it is derived from <code class="docutils literal notranslate"><span class="pre">--serial-baud</span></code> using the Modbus RTU 3.5-character silent interval with a practical <code class="docutils literal notranslate"><span class="pre">0.005</span></code> s floor. Set it explicitly for slow devices that need extra settling time.</p></li>
 </ul>
+<p>Default serial/RTU examples:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p><code class="docutils literal notranslate"><span class="pre">--serial-baud</span></code></p></th>
+<th class="head"><p>Auto <code class="docutils literal notranslate"><span class="pre">--interval</span></code></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">1200</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.03208</span></code> s</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">2400</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.01604</span></code> s</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">4800</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.00802</span></code> s</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">9600</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.005</span></code> s</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">19200</span></code> and above</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.005</span></code> s</p></td>
+</tr>
+</tbody>
+</table>
 </section>
 <section id="configuration-file">
 <h2>Configuration File<a class="headerlink" href="#configuration-file" title="Link to this heading"></a></h2>
@@ -361,9 +408,22 @@
 <li><p>TCP/UDP (<cite>–tcp</cite>/<cite>–udp</cite>) use the <cite>socket</cite> framer; other framers are rejected. If <cite>–framer default</cite> is used, pymodbus defaults to socket framer.</p></li>
 </ul>
 </section>
+<section id="persistent-modbus-connection">
+<h2>Persistent Modbus connection<a class="headerlink" href="#persistent-modbus-connection" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">modpoll</span></code> keeps the Modbus client open between poll cycles and MQTT commands. The connection is closed on process shutdown and after transport failures, then retried with a non-blocking exponential backoff. This avoids repeated connect/close overhead while preventing a dead bus or half-open socket from blocking the main loop for a long backoff sleep.</p>
+<p>Operational notes:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--timeout</span></code> still bounds individual Modbus operations at the pymodbus client level.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--interval</span></code> defaults to <code class="docutils literal notranslate"><span class="pre">0.0</span></code> on TCP/UDP so persistent connections are not hidden behind an artificial 0.5 s poller delay. Serial/RTU derives its default from <code class="docutils literal notranslate"><span class="pre">--serial-baud</span></code> using the Modbus RTU 3.5-character silent interval, with a <code class="docutils literal notranslate"><span class="pre">0.005</span></code> s floor for practical scheduling. The same delay is used between pollers in a poll cycle and between references in one MQTT <code class="docutils literal notranslate"><span class="pre">set</span></code> message.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--modbus-backoff-base</span></code> and <code class="docutils literal notranslate"><span class="pre">--modbus-backoff-max</span></code> control reconnect pacing after failures.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--modbus-max-connection-age</span></code> can recycle a long-lived connection periodically; it is disabled by default.</p></li>
+<li><p>On serial/RTU transports, the port remains reserved while <code class="docutils literal notranslate"><span class="pre">modpoll</span></code> runs. Stop <code class="docutils literal notranslate"><span class="pre">modpoll</span></code> before debugging the same port with another tool.</p></li>
+<li><p>Transport exceptions raised during polling, MQTT get, or MQTT set close the Modbus connection and enter backoff immediately. Modbus exception responses returned by a device are counted as operation failures without forcing a reconnect.</p></li>
+</ul>
+</section>
 <section id="mqtt-retain">
 <h2>MQTT retain<a class="headerlink" href="#mqtt-retain" title="Link to this heading"></a></h2>
-<p>By default, published data messages are <strong>not</strong> retained by the broker. Use <code class="docutils literal notranslate"><span class="pre">--mqtt-retain</span></code> to set the MQTT retain flag on data publishes (<code class="docutils literal notranslate"><span class="pre">publish_data</span></code> only; diagnostics are never retained).</p>
+<p>By default, published data and diagnostics messages are <strong>not</strong> retained by the broker. Use <code class="docutils literal notranslate"><span class="pre">--mqtt-retain</span></code> to set the MQTT retain flag on data and diagnostics publishes (<code class="docutils literal notranslate"><span class="pre">publish_data</span></code> and <code class="docutils literal notranslate"><span class="pre">--diagnostics-rate</span></code> topics). The status topic <code class="docutils literal notranslate"><span class="pre">modpoll/status</span></code> is always retained independently of <code class="docutils literal notranslate"><span class="pre">--mqtt-retain</span></code>.</p>
 <p>This is useful when subscribers (dashboards, automations) connect after <code class="docutils literal notranslate"><span class="pre">modpoll</span></code> has already started: they receive the last known values immediately instead of waiting for the next poll cycle.</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>modpoll<span class="w"> </span>--tcp<span class="w"> </span><span class="m">192</span>.168.1.10<span class="w"> </span>--mqtt-host<span class="w"> </span>localhost<span class="w"> </span>--mqtt-retain<span class="w"> </span>--config<span class="w"> </span>examples/modsim.csv
 </pre></div>
@@ -371,8 +431,59 @@
 <p><strong>Caveats:</strong></p>
 <ul class="simple">
 <li><p>If a Modbus device becomes unreachable, <code class="docutils literal notranslate"><span class="pre">modpoll</span></code> stops publishing for that device but the broker may still serve the last retained message, which can look like a live value.</p></li>
-<li><p>Retain is not a last-will/offline signal; it only stores the last successful publish per topic.</p></li>
+<li><p>Retain is not a last-will/offline signal for data or diagnostics; use <code class="docutils literal notranslate"><span class="pre">modpoll/status</span></code> for process presence (see below).</p></li>
 </ul>
+</section>
+<section id="mqtt-status">
+<h2>MQTT status<a class="headerlink" href="#mqtt-status" title="Link to this heading"></a></h2>
+<p>When <code class="docutils literal notranslate"><span class="pre">--mqtt-host</span></code> is set, <code class="docutils literal notranslate"><span class="pre">modpoll</span></code> publishes process presence on <code class="docutils literal notranslate"><span class="pre">modpoll/status</span></code>:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="nt">&quot;online&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>On a clean shutdown, <code class="docutils literal notranslate"><span class="pre">online</span></code> is set to <code class="docutils literal notranslate"><span class="pre">false</span></code> before disconnecting. On an unexpected disconnect (crash, network loss), the broker publishes a last-will message with <code class="docutils literal notranslate"><span class="pre">{&quot;online&quot;:</span> <span class="pre">false}</span></code>. Status messages are <strong>always</strong> retained.</p>
+</section>
+<section id="mqtt-diagnostics">
+<h2>MQTT diagnostics<a class="headerlink" href="#mqtt-diagnostics" title="Link to this heading"></a></h2>
+<p>When <code class="docutils literal notranslate"><span class="pre">--diagnostics-rate</span></code> is greater than zero, <code class="docutils literal notranslate"><span class="pre">modpoll</span></code> periodically publishes diagnostics.</p>
+<p><strong>Per device</strong> (<code class="docutils literal notranslate"><span class="pre">--mqtt-diagnostics-topic-pattern</span></code>, default <code class="docutils literal notranslate"><span class="pre">modpoll/{device}/diagnostics</span></code>):</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;poll_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;error_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;last_poll_success&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;get_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;get_errors&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;get_success&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;get_unknown_refs&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;get_read_errors&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;set_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">8</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;set_errors&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;set_success&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">7</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;set_unknown_refs&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;config_source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/path/to/config.csv&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p><strong>Process-wide</strong> (<code class="docutils literal notranslate"><span class="pre">modpoll/diagnostics</span></code>):</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;mqtt_connected&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;modbus_ok&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;devices_failing&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;last_cycle_s&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">10.1</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;modbus_connection_state&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;READY&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;modbus_connected&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;modbus_connected_since&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1760000000.0</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;modbus_last_success_at&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1760000010.0</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;modbus_last_failure_at&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;modbus_last_error&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;modbus_consecutive_failures&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;modbus_backoff_until&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;modbus_connect_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;modbus_reconnect_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;modbus_transaction_failure_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Diagnostics retain follows <code class="docutils literal notranslate"><span class="pre">--mqtt-retain</span></code> (same as data topics). Diagnostics report operational health; they are not a substitute for <code class="docutils literal notranslate"><span class="pre">modpoll/status</span></code> presence. <code class="docutils literal notranslate"><span class="pre">last_cycle_s</span></code> is <code class="docutils literal notranslate"><span class="pre">0</span></code> until the first poll cycle completes. <code class="docutils literal notranslate"><span class="pre">modbus_ok</span></code> reports whether the Modbus transport was available for all scheduled poll handlers in the latest cycle; per-device logical failures are reflected separately by <code class="docutils literal notranslate"><span class="pre">devices_failing</span></code> and device diagnostics. When Modbus is unavailable, <code class="docutils literal notranslate"><span class="pre">modbus_connection_state</span></code>, <code class="docutils literal notranslate"><span class="pre">modbus_last_error</span></code> and <code class="docutils literal notranslate"><span class="pre">modbus_backoff_until</span></code> show whether the process is waiting before the next reconnect attempt.</p>
 </section>
 <section id="mqtt-payload-keys">
 <h2>MQTT payload keys<a class="headerlink" href="#mqtt-payload-keys" title="Link to this heading"></a></h2>
@@ -384,10 +495,6 @@
 <section id="mqtt-single-publish">
 <h2>MQTT single publish<a class="headerlink" href="#mqtt-single-publish" title="Link to this heading"></a></h2>
 <p>By default, all references for a device are published in one JSON object on the data topic. With <code class="docutils literal notranslate"><span class="pre">--mqtt-single</span></code>, each reference is published on its own topic under the publish pattern, e.g. <code class="docutils literal notranslate"><span class="pre">modpoll/{device}/data/{ref_name}</span></code>. List values (<code class="docutils literal notranslate"><span class="pre">bool8</span></code> / <code class="docutils literal notranslate"><span class="pre">bool16</span></code>) are split into indexed sub-topics (<code class="docutils literal notranslate"><span class="pre">.../{ref_name}/0</span></code>, <code class="docutils literal notranslate"><span class="pre">.../1</span></code>, …).</p>
-</section>
-<section id="mqtt-diagnostics">
-<h2>MQTT diagnostics<a class="headerlink" href="#mqtt-diagnostics" title="Link to this heading"></a></h2>
-<p>When <code class="docutils literal notranslate"><span class="pre">--diagnostics-rate</span></code> is greater than zero, <code class="docutils literal notranslate"><span class="pre">modpoll</span></code> periodically publishes diagnostics to <code class="docutils literal notranslate"><span class="pre">--mqtt-diagnostics-topic-pattern</span></code> (default <code class="docutils literal notranslate"><span class="pre">modpoll/{device}/diagnostics</span></code>). The JSON payload contains <code class="docutils literal notranslate"><span class="pre">poll_count</span></code>, <code class="docutils literal notranslate"><span class="pre">error_count</span></code>, and <code class="docutils literal notranslate"><span class="pre">last_poll_success</span></code>. Diagnostics messages are never retained.</p>
 </section>
 <section id="publish-behavior">
 <h2>Publish behavior<a class="headerlink" href="#publish-behavior" title="Link to this heading"></a></h2>
@@ -416,8 +523,27 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">bool8</span></code> / <code class="docutils literal notranslate"><span class="pre">bool16</span></code> expect a JSON array of 8 or 16 booleans.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">stringNNN</span></code> references expect a string value.</p></li>
 <li><p>Multiple references can be written in a single message.</p></li>
+<li><p>Unknown reference keys are skipped with a warning; <code class="docutils literal notranslate"><span class="pre">set_unknown_refs</span></code>, <code class="docutils literal notranslate"><span class="pre">set_errors</span></code>, and <code class="docutils literal notranslate"><span class="pre">set_success</span></code> in device diagnostics track write attempts (see MQTT diagnostics).</p></li>
 </ul>
 <p>Duplicate reference names on the same device are rejected when loading the config file.</p>
+</section>
+<section id="mqtt-on-demand-read-get">
+<h2>MQTT on-demand read (get)<a class="headerlink" href="#mqtt-on-demand-read-get" title="Link to this heading"></a></h2>
+<p>Subscribe pattern (default): <code class="docutils literal notranslate"><span class="pre">modpoll/+/get</span></code>. Publish to <code class="docutils literal notranslate"><span class="pre">modpoll/{device}/get</span></code> with a JSON object whose keys are reference names (values are ignored, use <code class="docutils literal notranslate"><span class="pre">null</span></code>):</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;temp&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;pressure&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>On success, the response is published to <code class="docutils literal notranslate"><span class="pre">modpoll/{device}/get/response</span></code> with a JSON object of reference names to decoded values (same units as periodic MQTT publish). References that could not be read are omitted from the payload.</p></li>
+<li><p>An empty payload <code class="docutils literal notranslate"><span class="pre">{}</span></code> on the request is ignored (warning logged, no response, no diagnostics). An empty response <code class="docutils literal notranslate"><span class="pre">{}</span></code> means the request was processed but no value could be read.</p></li>
+<li><p>On partial failure, <code class="docutils literal notranslate"><span class="pre">get_errors</span></code> is incremented once per request (and <code class="docutils literal notranslate"><span class="pre">get_success</span></code> when there were no errors). <code class="docutils literal notranslate"><span class="pre">get_unknown_refs</span></code> and <code class="docutils literal notranslate"><span class="pre">get_read_errors</span></code> count individual skipped or failed references.</p></li>
+<li><p>Multiple references in one request are read independently: known refs are returned even if others fail.</p></li>
+<li><p>Reads use targeted Modbus requests (minimal register/coil count per reference), not a full poller block.</p></li>
+<li><p>Uses the shared persistent Modbus connection; if the connection is in backoff, the request fails quickly and returns an empty response.</p></li>
+</ul>
 <p><strong>Breaking change (2.1.0+):</strong> the <code class="docutils literal notranslate"><span class="pre">ref</span></code>/<code class="docutils literal notranslate"><span class="pre">value</span></code> object format is no longer supported; use a reference map instead.</p>
 <p><strong>Breaking change (2.0.0+):</strong> the previous low-level format (<code class="docutils literal notranslate"><span class="pre">object_type</span></code>, <code class="docutils literal notranslate"><span class="pre">address</span></code>, <code class="docutils literal notranslate"><span class="pre">value</span></code>) is no longer supported.</p>
 </section>
