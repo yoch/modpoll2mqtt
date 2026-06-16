@@ -5,15 +5,16 @@ import socket
 import ssl
 import time
 from threading import Event
-from typing import List, Optional, Tuple
 
+from paho.mqtt import MQTTException
+from paho.mqtt.client import (
+    CallbackAPIVersion,
+    MQTTMessageInfo,
+    MQTTProtocolVersion,
+)
 from paho.mqtt.client import (
     Client as MQTTClient,
-    CallbackAPIVersion,
-    MQTTProtocolVersion,
-    MQTTMessageInfo,
 )
-from paho.mqtt import MQTTException
 
 from .utils import delay_thread, on_threading_event
 
@@ -27,14 +28,14 @@ class MqttHandler:
         name: str,
         host: str,
         port: int,
-        user: Optional[str],
-        password: Optional[str],
-        clientid: Optional[str],
+        user: str | None,
+        password: str | None,
+        clientid: str | None,
         qos: int,
-        subscribe_topics: Optional[List[str]] = None,
+        subscribe_topics: list[str] | None = None,
         use_tls: bool = False,
         tls_version: str = "tlsv1.2",
-        cacerts: Optional[str] = None,
+        cacerts: str | None = None,
         insecure: bool = False,
         mqtt_version: str = "5.0",
         log_level: str = "INFO",
@@ -48,7 +49,7 @@ class MqttHandler:
         self.password = password
         self.clientid = clientid
         self.qos = qos
-        self.subscribe_topics: List[str] = subscribe_topics or []
+        self.subscribe_topics: list[str] = subscribe_topics or []
         self.use_tls = use_tls
         self.tls_version = tls_version
         self.cacerts = cacerts
@@ -56,13 +57,13 @@ class MqttHandler:
         self.mqtt_version = mqtt_version
         self.loglevel = log_level
 
-        self.mqtt_client: Optional[MQTTClient] = None
+        self.mqtt_client: MQTTClient | None = None
         self.clean_start_or_session = qos == 0
         self.rx_queue_size = rx_queue_size
         self.retain_data_publishes = retain_data_publishes
         self.rx_queue: queue.Queue = queue.Queue(maxsize=rx_queue_size)
         self._connected_event = Event()
-        self._connect_rc: Optional[int] = None
+        self._connect_rc: int | None = None
         self._closed = False
         self.logger = logging.getLogger(__name__)
 
@@ -260,7 +261,7 @@ class MqttHandler:
         self._stop_mqtt_loop()
         return False
 
-    def publish_status(self, online: bool) -> Optional[MQTTMessageInfo]:
+    def publish_status(self, online: bool) -> MQTTMessageInfo | None:
         return self.publish(
             _MQTT_STATUS_TOPIC,
             json.dumps({"online": online}),
@@ -268,12 +269,12 @@ class MqttHandler:
             retain=True,
         )
 
-    def publish_data_message(self, topic: str, msg: str) -> Optional[MQTTMessageInfo]:
+    def publish_data_message(self, topic: str, msg: str) -> MQTTMessageInfo | None:
         return self.publish(topic, msg, qos=self.qos, retain=self.retain_data_publishes)
 
     def publish(
-        self, topic: str, msg: str, qos: Optional[int] = None, retain: bool = False
-    ) -> Optional[MQTTMessageInfo]:
+        self, topic: str, msg: str, qos: int | None = None, retain: bool = False
+    ) -> MQTTMessageInfo | None:
         if not self.mqtt_client:
             self.logger.error("MQTT client not initialized. Call setup() first.")
             return None
@@ -303,7 +304,7 @@ class MqttHandler:
             )
             return None
 
-    def receive(self) -> Tuple[Optional[str], Optional[bytes]]:
+    def receive(self) -> tuple[str | None, bytes | None]:
         try:
             topic, payload = self.rx_queue.get(block=False)
             return topic, payload

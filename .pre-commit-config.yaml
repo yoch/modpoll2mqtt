@@ -11,10 +11,12 @@ repos:
       - id: mixed-line-ending
         args: [--fix=lf]
       - id: requirements-txt-fixer
-  - repo: https://github.com/psf/black
-    rev: 26.5.1
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.13
     hooks:
-      - id: black
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
   - repo: https://github.com/python-poetry/poetry
     rev: "2.4.1"
     hooks:

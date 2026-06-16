@@ -5,17 +5,16 @@ import signal
 import sys
 from functools import partial
 
+from . import __version__
 from .arg_parser import get_parser
-from .mqtt_task import MqttHandler
 from .modbus_connection import ModbusConnectionManager
 from .modbus_task import (
-    setup_modbus_handlers,
-    publish_global_diagnostics,
     format_mqtt_payload_values,
+    publish_global_diagnostics,
+    setup_modbus_handlers,
 )
-
-from . import __version__
-from .utils import set_threading_event, delay_thread, on_threading_event, get_utc_time
+from .mqtt_task import MqttHandler
+from .utils import delay_thread, get_utc_time, on_threading_event, set_threading_event
 
 LOG_SIMPLE = "%(asctime)s | %(levelname).1s | %(name)s | %(message)s"
 logger = None

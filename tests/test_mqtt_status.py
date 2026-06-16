@@ -5,7 +5,7 @@ from paho.mqtt.client import ConnectFlags
 from paho.mqtt.packettypes import PacketTypes
 from paho.mqtt.reasoncodes import ReasonCode
 
-from modpoll.mqtt_task import MqttHandler, _MQTT_STATUS_TOPIC
+from modpoll.mqtt_task import _MQTT_STATUS_TOPIC, MqttHandler
 
 
 def _signal_connect(handler, rc=0):

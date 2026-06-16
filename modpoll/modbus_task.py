@@ -2,7 +2,6 @@ import csv
 import json
 import logging
 import math
-from typing import List, Optional
 
 import requests
 from prettytable import PrettyTable
@@ -10,15 +9,17 @@ from pymodbus.client import ModbusSerialClient, ModbusTcpClient, ModbusUdpClient
 from pymodbus.exceptions import ModbusException
 from pymodbus.framer import FramerType
 
-from .register_decode import ENDIAN_MAP, Endian, RegisterDecoder
-from .reference_write import write_reference as _write_reference
-from .reference_read import read_references as _read_references
+from .mqtt_task import MqttHandler
 from .reference_common import (
     call_with_device_id as _call_with_device_id,
+)
+from .reference_common import (
     find_device as _find_device,
 )
-from .utils import on_threading_event, delay_thread
-from .mqtt_task import MqttHandler
+from .reference_read import read_references as _read_references
+from .reference_write import write_reference as _write_reference
+from .register_decode import ENDIAN_MAP, RegisterDecoder
+from .utils import delay_thread, on_threading_event
 
 FLOAT_TYPE_PRECISION = 3
 MQTT_GLOBAL_DIAGNOSTICS_TOPIC = "modpoll/diagnostics"
@@ -66,7 +67,7 @@ def _poller_identity(poller: "Poller") -> tuple:
 
 
 def _validate_cross_device_config(
-    device_list: List["Device"], logger: logging.Logger
+    device_list: list["Device"], logger: logging.Logger
 ) -> None:
     by_slave: dict[int, list[str]] = {}
     by_slave_fc: dict[tuple[int, int], list[tuple[str, int, int]]] = {}
@@ -104,7 +105,7 @@ class Device:
     def __init__(self, device_name: str, device_id: int):
         self.name = device_name
         self.devid = device_id
-        self.pollerList: List[Poller] = []
+        self.pollerList: list[Poller] = []
         self.references: dict = {}
         self.errorCount = 0
         self.pollCount = 0
@@ -137,7 +138,7 @@ class Poller:
         self.start_address = start_address
         self.size = size
         self.endian = endian.lower()
-        self.readableReferences: List[Reference] = []
+        self.readableReferences: list[Reference] = []
         self.disabled = False
         self.failcounter = 0
         self.logger = logging.getLogger(__name__)
@@ -294,7 +295,7 @@ class Reference:
     ):
         self.device = device
         self.name = ref_name
-        self.bit: Optional[int] = None
+        self.bit: int | None = None
         try:
             if ":" in ref_addr:
                 addr, bit = ref_addr.split(":")
@@ -361,7 +362,7 @@ class Reference:
         else:
             return 1
 
-    def check_sanity(self, reference: int, size: int, fc: Optional[int] = None) -> bool:
+    def check_sanity(self, reference: int, size: int, fc: int | None = None) -> bool:
         if fc in (1, 2):
             if self.dtype == "bool" and self.bit is None:
                 return self.address in range(reference, size + reference)
@@ -388,12 +389,12 @@ class ModbusHandler:
         self,
         modbus_client,
         config_file: str,
-        mqtt_handler: Optional[MqttHandler] = None,
+        mqtt_handler: MqttHandler | None = None,
         timeout: float = 3.0,
         interval: float = 0.0,
         no_output: bool = False,
-        mqtt_publish_topic_pattern: Optional[str] = None,
-        mqtt_diagnostics_topic_pattern: Optional[str] = None,
+        mqtt_publish_topic_pattern: str | None = None,
+        mqtt_diagnostics_topic_pattern: str | None = None,
         mqtt_single_publish: bool = False,
         mqtt_keys: str = _MQTT_KEYS_NAME_WITH_UNIT,
         autoremove: bool = False,
@@ -412,7 +413,7 @@ class ModbusHandler:
         self.mqtt_single_publish = mqtt_single_publish
         self.mqtt_keys = mqtt_keys
         self.autoremove = autoremove
-        self.deviceList: List[Device] = []
+        self.deviceList: list[Device] = []
         self.logger = logging.getLogger(__name__)
 
     def load_config(self) -> bool:
@@ -428,10 +429,10 @@ class ModbusHandler:
                 self.deviceList = self._parse_config(csv_reader)
         except requests.RequestException:
             try:
-                with open(self.config_file, "r") as f:
+                with open(self.config_file) as f:
                     csv_reader = csv.reader(f, delimiter=self.csv_delimiter)
                     self.deviceList = self._parse_config(csv_reader)
-            except IOError as e:
+            except OSError as e:
                 self.logger.error(f"Error opening file: {e}")
                 return False
         if self.deviceList:
@@ -446,7 +447,7 @@ class ModbusHandler:
             )
             return False
 
-    def _parse_config(self, csv_reader) -> List[Device]:
+    def _parse_config(self, csv_reader) -> list[Device]:
         device_list = []
         current_device = None
         current_poller = None
@@ -732,7 +733,7 @@ class ModbusHandler:
         if ok_count:
             self.logger.info(f"Wrote {ok_count} value(s) for device={device_name}")
 
-    def read_references(self, device_name: str, ref_names: List[str]) -> dict:
+    def read_references(self, device_name: str, ref_names: list[str]) -> dict:
         dev = _find_device(self, device_name)
         if dev is None:
             return {}
@@ -878,14 +879,14 @@ class ModbusHandler:
         try:
             with open(file, "w") as f:
                 json.dump(data, f, indent=2)
-        except IOError as e:
+        except OSError as e:
             self.logger.error(f"Error exporting data: {e}")
 
-    def get_device_list(self) -> List[Device]:
+    def get_device_list(self) -> list[Device]:
         return self.deviceList
 
 
-def count_devices_failing(modbus_handlers: List[ModbusHandler]) -> int:
+def count_devices_failing(modbus_handlers: list[ModbusHandler]) -> int:
     return sum(
         1
         for handler in modbus_handlers
@@ -896,10 +897,10 @@ def count_devices_failing(modbus_handlers: List[ModbusHandler]) -> int:
 
 def publish_global_diagnostics(
     mqtt_handler: MqttHandler,
-    modbus_handlers: List[ModbusHandler],
+    modbus_handlers: list[ModbusHandler],
     modbus_ok: bool,
     last_cycle_s: float,
-    connection_diagnostics: Optional[dict] = None,
+    connection_diagnostics: dict | None = None,
 ) -> None:
     payload = {
         "mqtt_connected": mqtt_handler.is_connected(),
@@ -916,7 +917,7 @@ def publish_global_diagnostics(
     )
 
 
-def setup_modbus_handlers(args, mqtt_handler: Optional[MqttHandler] = None):
+def setup_modbus_handlers(args, mqtt_handler: MqttHandler | None = None):
     modbus_handlers = []
     modbus_client = _create_modbus_client(args)
     for config_file in args.config:

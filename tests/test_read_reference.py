@@ -1,9 +1,9 @@
 from unittest.mock import MagicMock
 
 import pytest
-
-from modpoll.modbus_task import Device, ModbusHandler, Poller, Reference
 from tests.helpers.modbus import FakeModbusMaster, handler_with_device
+
+from modpoll.modbus_task import Device, Poller, Reference
 
 
 def test_read_holding_uint16():

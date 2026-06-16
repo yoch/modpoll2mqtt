@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from typing import Any
 
 from pymodbus.exceptions import ModbusException
 
@@ -20,7 +21,7 @@ class TransactionResult:
     value: Any = None
     skipped: bool = False
     callback_started: bool = False
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class ModbusConnectionManager:
@@ -38,9 +39,9 @@ class ModbusConnectionManager:
         *,
         backoff_base: float = MODBUS_BACKOFF_BASE,
         backoff_max: float = MODBUS_BACKOFF_MAX,
-        max_connection_age: Optional[float] = None,
+        max_connection_age: float | None = None,
         clock: Callable[[], float] = get_utc_time,
-        logger: Optional[logging.Logger] = None,
+        logger: logging.Logger | None = None,
     ):
         self.client = client
         self.backoff_base = backoff_base
@@ -65,7 +66,7 @@ class ModbusConnectionManager:
     def connected(self) -> bool:
         return self.state == self.READY
 
-    def ensure_connected(self, now: Optional[float] = None) -> bool:
+    def ensure_connected(self, now: float | None = None) -> bool:
         now = self.clock() if now is None else now
 
         if self.state == self.READY:

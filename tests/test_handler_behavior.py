@@ -7,16 +7,16 @@ from math import inf
 from unittest.mock import MagicMock
 
 import pytest
-
-from modpoll.arg_parser import get_parser
-from modpoll.modbus_task import Device, Poller, Reference, ModbusHandler
-from modpoll.mqtt_task import MqttHandler
 from tests.helpers.modbus import (
     FakeModbusMaster,
     FakeModbusResult,
     handler_with_device,
     log_messages,
 )
+
+from modpoll.arg_parser import get_parser
+from modpoll.modbus_task import Device, ModbusHandler, Poller, Reference
+from modpoll.mqtt_task import MqttHandler
 
 
 def _device_with_two_register_pollers():

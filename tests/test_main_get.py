@@ -4,11 +4,11 @@ from unittest.mock import MagicMock
 
 import pytest
 from pymodbus.exceptions import ModbusException
+from tests.helpers.modbus import FakeModbusMaster
 
 from modpoll import main
 from modpoll.modbus_task import Device, ModbusHandler, Poller, Reference
 from modpoll.utils import clear_threading_event
-from tests.helpers.modbus import FakeModbusMaster
 
 
 @pytest.fixture(autouse=True)

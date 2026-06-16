@@ -80,8 +80,9 @@ poetry config keyring.enabled false
     make check
     ```
 
-    This runs `black` among other tools. **Do not commit Python changes until
-    `make check` passes cleanly** — if `black` reformats files, stage those changes and
+    This runs `ruff format` and `ruff check` among other tools. **Do not commit Python
+    changes until `make check` passes cleanly** — if ruff reformats or fixes files,
+    stage those changes and include them in the same commit. Committing first and
     include them in the same commit. Committing first and amending afterward is a smell;
     it usually means this step was skipped.
 
@@ -179,7 +180,7 @@ tagging a release.
    make ci
    ```
 
-   If `make check` reformats files (e.g. `black`), stage the fixes and amend or
+   If `make check` reformats files (e.g. `ruff format`), stage the fixes and amend or
    recommit before pushing.
 
 ### Typical release flow

@@ -1,9 +1,9 @@
 import pytest  # type: ignore
+from tests.modbus_integration import ModbusEndpoint
+
 from modpoll.arg_parser import get_parser
 from modpoll.modbus_connection import ModbusConnectionManager
 from modpoll.modbus_task import setup_modbus_handlers
-
-from tests.modbus_integration import ModbusEndpoint
 
 
 def _modbus_args(endpoint: ModbusEndpoint, *config_paths: str) -> list[str]:

@@ -1,8 +1,8 @@
 import pytest
 from pymodbus.framer import FramerType
 
-from modpoll.arg_parser import get_parser
 from modpoll import modbus_task as mt
+from modpoll.arg_parser import get_parser
 
 
 def _fake_args(argv):

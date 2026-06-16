@@ -1,5 +1,6 @@
-import pytest
 import ssl
+
+import pytest
 from paho.mqtt.client import ConnectFlags
 from paho.mqtt.packettypes import PacketTypes
 from paho.mqtt.reasoncodes import ReasonCode
@@ -445,7 +446,8 @@ def test_connect_returns_false_when_connack_rejected(monkeypatch):
 
     handler.mqtt_client.loop_start = lambda: None
     handler.mqtt_client.connect_async = lambda **kwargs: _signal_connect(
-        handler, rc=135  # CONNACK "Not authorized"
+        handler,
+        rc=135,  # CONNACK "Not authorized"
     )
     handler.mqtt_client.is_connected = lambda: False
     handler.mqtt_client.disconnect = lambda *args, **kwargs: disconnect_called.append(

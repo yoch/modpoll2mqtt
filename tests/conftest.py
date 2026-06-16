@@ -2,7 +2,6 @@ import os
 import uuid
 
 import pytest
-
 from tests.modbus_integration import (
     ModbusEndpoint,
     ensure_modbus_test_server,

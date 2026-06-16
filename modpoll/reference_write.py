@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from .reference_common import (
     call_with_device_id as _call_with_device_id,
+)
+from .reference_common import (
     find_device as _find_device,
+)
+from .reference_common import (
     find_poller_for_ref as _find_poller_for_ref,
 )
 from .register_decode import ENDIAN_MAP, RegisterEncoder
@@ -15,7 +19,7 @@ if TYPE_CHECKING:
     from .modbus_task import Device, ModbusHandler, Poller, Reference
 
 
-def _value_to_raw(ref: "Reference", value):
+def _value_to_raw(ref: Reference, value):
     if ref.scale and not isinstance(value, bool) and not isinstance(value, list):
         raw = value / float(ref.scale)
         if ref.dtype in (
@@ -31,12 +35,12 @@ def _value_to_raw(ref: "Reference", value):
     return value
 
 
-def _get_encoder(poller: "Poller") -> RegisterEncoder:
+def _get_encoder(poller: Poller) -> RegisterEncoder:
     byteorder, wordorder = ENDIAN_MAP[poller.endian.strip().upper()]
     return RegisterEncoder(byteorder=byteorder, wordorder=wordorder)
 
 
-def _expect_bool_list(ref: "Reference", value, width: int, logger) -> bool:
+def _expect_bool_list(ref: Reference, value, width: int, logger) -> bool:
     if not isinstance(value, list) or len(value) != width:
         logger.error(f"Reference '{ref.name}' expects a list of {width} booleans")
         return False
@@ -44,7 +48,7 @@ def _expect_bool_list(ref: "Reference", value, width: int, logger) -> bool:
 
 
 def write_reference(
-    handler: "ModbusHandler", device_name: str, ref_name: str, value
+    handler: ModbusHandler, device_name: str, ref_name: str, value
 ) -> bool:
     dev = _find_device(handler, device_name)
     if dev is None:
@@ -82,7 +86,7 @@ def write_reference(
     return _write_register_reference(handler, dev, ref, poller, value)
 
 
-def _write_coil(handler: "ModbusHandler", dev: "Device", address: int, value) -> bool:
+def _write_coil(handler: ModbusHandler, dev: Device, address: int, value) -> bool:
     result = _call_with_device_id(
         handler.modbus_client.write_coil,
         address,
@@ -92,7 +96,7 @@ def _write_coil(handler: "ModbusHandler", dev: "Device", address: int, value) ->
     return result is not None and not result.isError()
 
 
-def _write_coils(handler: "ModbusHandler", dev: "Device", address: int, values) -> bool:
+def _write_coils(handler: ModbusHandler, dev: Device, address: int, values) -> bool:
     result = _call_with_device_id(
         handler.modbus_client.write_coils,
         address,
@@ -103,7 +107,7 @@ def _write_coils(handler: "ModbusHandler", dev: "Device", address: int, values) 
 
 
 def _write_register(
-    handler: "ModbusHandler", dev: "Device", address: int, value: int
+    handler: ModbusHandler, dev: Device, address: int, value: int
 ) -> bool:
     result = _call_with_device_id(
         handler.modbus_client.write_register,
@@ -114,9 +118,7 @@ def _write_register(
     return result is not None and not result.isError()
 
 
-def _write_registers(
-    handler: "ModbusHandler", dev: "Device", address: int, values
-) -> bool:
+def _write_registers(handler: ModbusHandler, dev: Device, address: int, values) -> bool:
     result = _call_with_device_id(
         handler.modbus_client.write_registers,
         address,
@@ -126,7 +128,7 @@ def _write_registers(
     return result is not None and not result.isError()
 
 
-def _read_coils(handler: "ModbusHandler", dev: "Device", address: int, count: int):
+def _read_coils(handler: ModbusHandler, dev: Device, address: int, count: int):
     result = _call_with_device_id(
         handler.modbus_client.read_coils,
         address,
@@ -139,7 +141,7 @@ def _read_coils(handler: "ModbusHandler", dev: "Device", address: int, count: in
 
 
 def _read_holding_registers(
-    handler: "ModbusHandler", dev: "Device", address: int, count: int
+    handler: ModbusHandler, dev: Device, address: int, count: int
 ):
     result = _call_with_device_id(
         handler.modbus_client.read_holding_registers,
@@ -153,10 +155,10 @@ def _read_holding_registers(
 
 
 def _write_coil_reference(
-    handler: "ModbusHandler",
-    dev: "Device",
-    ref: "Reference",
-    poller: "Poller",
+    handler: ModbusHandler,
+    dev: Device,
+    ref: Reference,
+    poller: Poller,
     value,
 ) -> bool:
     if ref.dtype == "bool" and ref.bit is None:
@@ -186,10 +188,10 @@ def _write_coil_reference(
 
 
 def _write_register_reference(
-    handler: "ModbusHandler",
-    dev: "Device",
-    ref: "Reference",
-    poller: "Poller",
+    handler: ModbusHandler,
+    dev: Device,
+    ref: Reference,
+    poller: Poller,
     value,
 ) -> bool:
     if ref.dtype == "bool" and ref.bit is not None:

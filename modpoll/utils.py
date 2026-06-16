@@ -1,5 +1,5 @@
-import threading
 import datetime
+import threading
 from datetime import timezone
 
 _thread_event = threading.Event()

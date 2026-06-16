@@ -3,10 +3,10 @@ import io
 from unittest.mock import MagicMock
 
 import pytest
+from tests.helpers.modbus import FakeModbusMaster, handler_with_device
 
 from modpoll.modbus_task import Device, ModbusHandler, Poller, Reference
-from modpoll.register_decode import Endian, RegisterDecoder, RegisterEncoder
-from tests.helpers.modbus import FakeModbusMaster, handler_with_device
+from modpoll.register_decode import RegisterDecoder, RegisterEncoder
 
 
 def test_encoder_round_trip_int16_and_float32():
