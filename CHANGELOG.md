@@ -2,15 +2,31 @@
 
 ## [Unreleased]
 
+## [2.2.0](https://github.com/yoch/modpoll2mqtt/compare/v2.1.2...v2.2.0) (2026-06-16)
+
 ### Features
 
-* enrich MQTT diagnostics with `config_source` per device and global `modpoll/diagnostics` process health payload
+* **MQTT on-demand read (get):** subscribe on `modpoll/+/get` (`--mqtt-get-topic-pattern`); publish `{"ref": null}` to `modpoll/{device}/get`; response on `modpoll/{device}/get/response` with partial success (unknown or failed refs omitted); targeted Modbus reads via `reference_read.py` with adjacent register batching
+* **Persistent Modbus connection:** `ModbusConnectionManager` keeps the client open between poll cycles and MQTT commands; non-blocking exponential reconnect backoff (`--modbus-backoff-base`, `--modbus-backoff-max`); optional connection recycle (`--modbus-max-connection-age`)
+* enrich per-device MQTT diagnostics with `config_source`, get/set counters (`get_count`, `get_errors`, `get_success`, `get_unknown_refs`, `get_read_errors`, `set_count`, `set_errors`, `set_success`, `set_unknown_refs`)
+* publish process-wide health on `modpoll/diagnostics` (`mqtt_connected`, `modbus_ok`, `devices_failing`, `last_cycle_s`, Modbus connection state and reconnect metrics)
 * publish process presence on `modpoll/status` with last-will (`online: false`) and birth message (`online: true`); status is always retained
 * apply `--mqtt-retain` to diagnostics topics (same policy as data publishes)
 
+### BREAKING CHANGES
+
+* **`--interval` default is now transport-aware:** `0.0` s for TCP/UDP (was `0.5` s); serial/RTU derives the RTU 3.5-character frame gap from `--serial-baud` with a `0.005` s floor. Set `--interval` explicitly for slow devices.
+* **Modbus connect/close per poll cycle removed:** the client stays open until shutdown or a transport failure; on serial/RTU the port remains reserved while `modpoll` runs
+* **MQTT multi-reference writes** now use `--interval` between successive refs in one `set` message (was a fixed `0.1` s delay)
+
 ### Documentation
 
-* document MQTT status, global diagnostics, and updated retain behavior in `docs/usage.rst`
+* document MQTT get, persistent connection, transport-aware `--interval`, and extended diagnostics in `docs/usage.rst`
+
+### Tests
+
+* add `tests/test_modbus_connection.py`, extend `tests/test_main_get.py` for backoff, connection reuse, and diagnostic counters
+* migrate Modbus lifecycle tests to `ModbusConnectionManager`
 
 ## [2.1.2](https://github.com/yoch/modpoll2mqtt/compare/v2.1.1...v2.1.2) (2026-06-15)
 

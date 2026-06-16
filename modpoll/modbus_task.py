@@ -166,9 +166,7 @@ class Poller:
         if result is not None and not result.isError():
             if self.fc in (1, 2):
                 bits = result.bits
-                sorted_refs = sorted(
-                    self.readableReferences, key=lambda r: r.address
-                )
+                sorted_refs = sorted(self.readableReferences, key=lambda r: r.address)
                 for ref in sorted_refs:
                     try:
                         value = self.decode_coil_bits(ref, bits, self.start_address)
@@ -184,15 +182,11 @@ class Poller:
                         )
             else:
                 data = result.registers
-                sorted_refs = sorted(
-                    self.readableReferences, key=lambda r: r.address
-                )
+                sorted_refs = sorted(self.readableReferences, key=lambda r: r.address)
                 for ref in sorted_refs:
                     try:
                         ref.update_value(
-                            self.decode_register_block(
-                                ref, data, self.start_address
-                            )
+                            self.decode_register_block(ref, data, self.start_address)
                         )
                     except Exception as e:
                         self.logger.error(

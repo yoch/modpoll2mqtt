@@ -105,7 +105,9 @@ class ModbusConnectionManager:
         self._has_connected = True
         return True
 
-    def execute(self, operation_name: str, callback: Callable[[], Any]) -> TransactionResult:
+    def execute(
+        self, operation_name: str, callback: Callable[[], Any]
+    ) -> TransactionResult:
         if not self.ensure_connected():
             return TransactionResult(
                 ok=False,

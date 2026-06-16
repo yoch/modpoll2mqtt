@@ -248,7 +248,9 @@ def _run_main_with_script(monkeypatch, master, handler, messages, extra_args=Non
     return _FakeMqttScript
 
 
-def test_main_poll_transport_failure_closes_and_get_is_fast_failed_by_backoff(monkeypatch):
+def test_main_poll_transport_failure_closes_and_get_is_fast_failed_by_backoff(
+    monkeypatch,
+):
     device = _device_with_temp_ref()
     master = _ExplodingReadMaster(registers=[42])
     handler = ModbusHandler(master, "dummy.csv")

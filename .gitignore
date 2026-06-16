@@ -250,6 +250,7 @@ $RECYCLE.BIN/
 
 # Notes de travail locales (non versionnées)
 ROADMAP.md
+B2_IMPLEMENTATION_PLAN.md
 NOTES-MQTT-lecture-ecriture.md
 
 examples/CTA/

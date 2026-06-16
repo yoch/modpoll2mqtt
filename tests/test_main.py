@@ -293,7 +293,9 @@ def test_interval_default_depends_on_transport():
 
     tcp_args = parser.parse_args(["--config", "dummy.csv", "--tcp", "127.0.0.1"])
     udp_args = parser.parse_args(["--config", "dummy.csv", "--udp", "127.0.0.1"])
-    serial_args = parser.parse_args(["--config", "dummy.csv", "--serial", "/dev/ttyUSB0"])
+    serial_args = parser.parse_args(
+        ["--config", "dummy.csv", "--serial", "/dev/ttyUSB0"]
+    )
     slow_serial_args = parser.parse_args(
         [
             "--config",

@@ -146,7 +146,9 @@ def test_initial_diagnostics_are_safe_before_connect():
     }
 
 
-@pytest.mark.parametrize("exc", [OSError("dial failed"), ModbusException("dial failed")])
+@pytest.mark.parametrize(
+    "exc", [OSError("dial failed"), ModbusException("dial failed")]
+)
 def test_connect_exception_enters_backoff_without_callback(exc):
     clock = Clock()
     client = MagicMock()
