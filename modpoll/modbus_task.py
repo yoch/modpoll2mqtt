@@ -122,6 +122,7 @@ class ModbusHandler:
         mqtt_diagnostics_topic_pattern: str | None = None,
         mqtt_single_publish: bool = False,
         mqtt_keys: str = _MQTT_KEYS_NAME_WITH_UNIT,
+        mqtt_on_change: bool = False,
         autoremove: bool = False,
         csv_delimiter_code: str = "comma",
     ) -> None:
@@ -137,7 +138,10 @@ class ModbusHandler:
         self.mqtt_diagnostics_topic_pattern = mqtt_diagnostics_topic_pattern
         self.mqtt_single_publish = mqtt_single_publish
         self.mqtt_keys = mqtt_keys
+        self.mqtt_on_change = mqtt_on_change
         self.autoremove = autoremove
+        self._last_mqtt_payloads: dict[str, dict[str, ModbusValue]] = {}
+        self._mqtt_connection_generation: int | None = None
         self.deviceList: list[Device] = []
         self.logger = logging.getLogger(__name__)
 
@@ -530,6 +534,24 @@ class ModbusHandler:
         if not self.mqtt_handler or not self.mqtt_publish_topic_pattern:
             return
 
+        if self.mqtt_on_change:
+            connection_generation = getattr(
+                self.mqtt_handler,
+                "connection_generation",
+                None,
+            )
+
+            if isinstance(connection_generation, int):
+                if (
+                    self._mqtt_connection_generation is not None
+                    and connection_generation != self._mqtt_connection_generation
+                ):
+                    self.logger.debug(
+                        "MQTT connection changed; invalidating MQTT change cache."
+                    )
+                    self._last_mqtt_payloads.clear()
+                self._mqtt_connection_generation = connection_generation
+
         for dev in self.deviceList:
             if not dev.pollSuccess:
                 self.logger.debug(
@@ -547,27 +569,98 @@ class ModbusHandler:
                 key = _mqtt_payload_key(ref, self.mqtt_keys)
                 payload[key] = ref_val
 
-                if self.mqtt_single_publish:
-                    topic = f"{self.mqtt_publish_topic_pattern.replace('{{device_name}}', dev.name)}/{ref.name}"
+            if not payload:
+                continue
+
+            previous_payload = self._last_mqtt_payloads.get(dev.name)
+
+            if (
+                self.mqtt_on_change
+                and previous_payload is not None
+                and payload == previous_payload
+            ):
+                self.logger.debug(
+                    f"Skipping unchanged MQTT data for device: {dev.name}"
+                )
+                continue
+
+            if self.mqtt_single_publish:
+                published_values: dict[str, ModbusValue] = {}
+
+                for ref in dev.references.values():
+                    if ref.val is None:
+                        continue
+
+                    ref_val = format_mqtt_scalar(ref.val)
+                    if ref_val is None:
+                        continue
+
+                    key = _mqtt_payload_key(ref, self.mqtt_keys)
+
+                    if (
+                        self.mqtt_on_change
+                        and previous_payload is not None
+                        and previous_payload.get(key) == ref_val
+                    ):
+                        continue
+
+                    topic = (
+                        f"{self.mqtt_publish_topic_pattern.replace('{{device_name}}', dev.name)}"
+                        f"/{ref.name}"
+                    )
+
+                    publish_ok = True
+
                     if isinstance(ref_val, list):
                         for i, entry in enumerate(ref_val):
-                            msg = json.dumps(entry)
-                            self.mqtt_handler.publish_data_message(f"{topic}/{i}", msg)
+                            result = self.mqtt_handler.publish_data_message(
+                                f"{topic}/{i}",
+                                json.dumps(entry),
+                            )
+                            if result is None:
+                                publish_ok = False
                     else:
                         msg = (
                             json.dumps(ref_val)
                             if isinstance(ref_val, bool)
                             else str(ref_val)
                         )
-                        self.mqtt_handler.publish_data_message(topic, msg)
+                        result = self.mqtt_handler.publish_data_message(
+                            topic,
+                            msg,
+                        )
+                        if result is None:
+                            publish_ok = False
 
-            if payload and not self.mqtt_single_publish:
-                if timestamp is not None:
-                    payload["timestamp"] = timestamp
-                topic = self.mqtt_publish_topic_pattern.replace(
-                    "{{device_name}}", dev.name
-                )
-                self.mqtt_handler.publish_data_message(topic, json.dumps(payload))
+                    if publish_ok and self.mqtt_on_change:
+                        published_values[key] = ref_val
+
+                if self.mqtt_on_change and published_values:
+                    if previous_payload is None:
+                        self._last_mqtt_payloads[dev.name] = published_values
+                    else:
+                        self._last_mqtt_payloads[dev.name] = {
+                            **previous_payload,
+                            **published_values,
+                        }
+
+                continue
+
+            mqtt_payload = (
+                {**payload, "timestamp": timestamp}
+                if timestamp is not None
+                else payload
+            )
+
+            topic = self.mqtt_publish_topic_pattern.replace("{{device_name}}", dev.name)
+
+            result = self.mqtt_handler.publish_data_message(
+                topic,
+                json.dumps(mqtt_payload),
+            )
+
+            if result is not None and self.mqtt_on_change:
+                self._last_mqtt_payloads[dev.name] = dict(payload)
 
     def publish_diagnostics(self) -> None:
         if not self.mqtt_handler:
@@ -664,6 +757,7 @@ def setup_modbus_handlers(
             mqtt_diagnostics_topic_pattern=args.mqtt_diagnostics_topic_pattern,
             mqtt_single_publish=args.mqtt_single,
             mqtt_keys=args.mqtt_keys,
+            mqtt_on_change=args.mqtt_on_change,
             autoremove=args.autoremove,
             csv_delimiter_code=args.csv_delimiter,
         )
