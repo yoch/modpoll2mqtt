@@ -267,6 +267,11 @@ def get_parser() -> ModpollArgumentParser:
         help="Publish each value in a single topic. If not specified, groups all values in one topic.",
     )
     parser.add_argument(
+        "--mqtt-on-change",
+        action="store_true",
+        help="Publish MQTT data only when Modbus data has changed.",
+    )
+    parser.add_argument(
         "--mqtt-keys",
         default="name-with-unit",
         choices=_MQTT_KEYS_CHOICES,
