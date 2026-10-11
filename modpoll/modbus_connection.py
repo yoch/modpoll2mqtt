@@ -21,7 +21,6 @@ MODBUS_BACKOFF_MAX = 60.0
 class TransactionResult:
     ok: bool
     value: object | None = None
-    skipped: bool = False
     callback_started: bool = False
     error: str | None = None
 
@@ -64,8 +63,6 @@ class ModbusConnectionManager:
 
         self.state: str = self.DISCONNECTED
         self.connected_since: float | None = None
-        self.last_success_at: float | None = None
-        self.last_failure_at: float | None = None
         self._connected_since_utc: float | None = None
         self._last_success_utc: float | None = None
         self._last_failure_utc: float | None = None
@@ -116,8 +113,6 @@ class ModbusConnectionManager:
         self.connected_since = now
         self._connected_since_utc = get_utc_time()
         self._last_success_utc = self._connected_since_utc
-        self.last_success_at = now
-        self._last_success_utc = get_utc_time()
         self.last_error = None
         self.backoff_until = None
         self.consecutive_failures = 0
@@ -131,7 +126,6 @@ class ModbusConnectionManager:
         if not self.ensure_connected():
             return TransactionResult(
                 ok=False,
-                skipped=True,
                 error=self.last_error or "modbus connection unavailable",
             )
 
@@ -149,9 +143,7 @@ class ModbusConnectionManager:
                 error=str(exc),
             )
 
-        now = self.clock()
         self.state = self.READY
-        self.last_success_at = now
         self._last_success_utc = get_utc_time()
         self.last_error = None
         self.backoff_until = None
@@ -197,7 +189,6 @@ class ModbusConnectionManager:
 
     def _record_failure(self, error: str, now: float) -> None:
         self.state = self.BACKOFF
-        self.last_failure_at = now
         self._last_failure_utc = get_utc_time()
         self.last_error = error
         self.consecutive_failures += 1

@@ -1,6 +1,19 @@
 """Shared Modbus test doubles for unit tests."""
 
+import csv
+import io
+import logging
+
+from modpoll.configuration import parse_config
 from modpoll.modbus_task import ModbusHandler
+
+
+def parse_test_config(config, delimiter=","):
+    return parse_config(
+        csv.reader(io.StringIO(config), delimiter=delimiter),
+        "test.csv",
+        logging.getLogger("modpoll.test"),
+    )
 
 
 class FakeModbusResult:

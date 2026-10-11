@@ -40,17 +40,17 @@ def test_shared_client_single_connect_and_close_for_persistent_lifecycle():
     assert client.close.call_count == 1
 
 
-def test_on_poll_unavailable_clears_poll_success():
+def test_begin_poll_cycle_clears_poll_success():
     client = MagicMock()
     handler = _handler_with_empty_poll(client)
     handler.deviceList[0].pollSuccess = True
 
-    handler.on_poll_unavailable()
+    handler.begin_poll_cycle()
 
     assert handler.deviceList[0].pollSuccess is False
 
 
-def test_on_poll_unavailable_autoremove_after_three_cycles():
+def test_begin_poll_cycle_never_autoremoves():
     client = MagicMock()
     device = Device("dev", 1)
     poller = Poller(device, 3, 0, 1, "BE_BE")
@@ -60,7 +60,7 @@ def test_on_poll_unavailable_autoremove_after_three_cycles():
     handler.deviceList = [device]
 
     for _ in range(3):
-        handler.on_poll_unavailable()
+        handler.begin_poll_cycle()
 
     assert poller.disabled is False
     assert poller.failcounter == 0
@@ -77,9 +77,9 @@ def test_connection_manager_backoff_is_non_blocking_after_failure():
     second = manager.execute("poll", callback)
 
     assert first.ok is False
-    assert first.skipped is True
+    assert first.callback_started is False
     assert second.ok is False
-    assert second.skipped is True
+    assert second.callback_started is False
     callback.assert_not_called()
     assert client.connect.call_count == 1
     assert manager.backoff_until == 105.0

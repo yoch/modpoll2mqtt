@@ -54,20 +54,7 @@ class ModpollArgumentParser(ArgumentParser):
             self.error("--serial-baud must be greater than 0")
         if parsed.interval is None:
             parsed.interval = _default_interval_for_transport(parsed)
-        if parsed.interval < 0:
-            self.error("--interval must be greater than or equal to 0")
-        if parsed.modbus_backoff_base < 0:
-            self.error("--modbus-backoff-base must be greater than or equal to 0")
-        if parsed.modbus_backoff_max < parsed.modbus_backoff_base:
-            self.error(
-                "--modbus-backoff-max must be greater than or equal to "
-                "--modbus-backoff-base"
-            )
-        if (
-            parsed.modbus_max_connection_age is not None
-            and parsed.modbus_max_connection_age <= 0
-        ):
-            self.error("--modbus-max-connection-age must be greater than 0")
+        positive = ("rate", "timeout", "mqtt_command_ttl")
         for key in (
             "rate",
             "timeout",
@@ -84,15 +71,20 @@ class ModpollArgumentParser(ArgumentParser):
             if (
                 not math.isfinite(value)
                 or value < 0
-                or (key in ("rate", "timeout", "mqtt_command_ttl") and value == 0)
+                or (key in positive and value == 0)
             ):
                 self.error(
-                    f"--{key.replace('_', '-')} must be finite and {'positive' if key in ('rate', 'timeout', 'mqtt_command_ttl') else 'nonnegative'}"
+                    f"--{key.replace('_', '-')} must be finite and "
+                    f"{'positive' if key in positive else 'nonnegative'}"
                 )
-        if parsed.modbus_max_connection_age is not None and not math.isfinite(
-            parsed.modbus_max_connection_age
-        ):
-            self.error("--modbus-max-connection-age must be finite")
+        if parsed.modbus_backoff_max < parsed.modbus_backoff_base:
+            self.error(
+                "--modbus-backoff-max must be greater than or equal to "
+                "--modbus-backoff-base"
+            )
+        age = parsed.modbus_max_connection_age
+        if age is not None and (not math.isfinite(age) or age <= 0):
+            self.error("--modbus-max-connection-age must be finite and positive")
         for key in ("tcp_port", "udp_port", "mqtt_port"):
             if not 1 <= getattr(parsed, key) <= 65535:
                 self.error(f"--{key.replace('_', '-')} must be 1..65535")
@@ -108,8 +100,6 @@ class ModpollArgumentParser(ArgumentParser):
             self.error("Use either --mqtt-pass-file or --mqtt-pass")
         if parsed.mqtt_session_expiry > 4294967295:
             self.error("--mqtt-session-expiry exceeds MQTT uint32 range")
-        if parsed.mqtt_tls_version != "tlsv1.2":
-            self.error("TLS 1.0/1.1 are unsupported; use --mqtt-tls-version tlsv1.2")
         if parsed.mqtt_session_expiry < 0:
             self.error("--mqtt-session-expiry must be nonnegative")
         if parsed.mqtt_session_expiry and not parsed.mqtt_clientid:
@@ -359,9 +349,9 @@ def get_parser() -> ModpollArgumentParser:
     parser.add_argument("--mqtt-cacerts", default=None, help="Path to ca keychain")
     parser.add_argument(
         "--mqtt-tls-version",
-        choices=["tlsv1.2", "tlsv1.1", "tlsv1"],
+        choices=["tlsv1.2"],
         default="tlsv1.2",
-        help="TLS protocol version, can be one of tlsv1.2 tlsv1.1 or tlsv1",
+        help="Minimum TLS protocol version; only tlsv1.2 is supported",
     )
     parser.add_argument(
         "--mqtt-single",

@@ -22,7 +22,6 @@ def test_mqtt_tls_cli_options_forwarded(monkeypatch):
             qos,
             subscribe_topics,
             use_tls,
-            tls_version,
             cacerts,
             insecure,
             mqtt_version,
@@ -41,7 +40,6 @@ def test_mqtt_tls_cli_options_forwarded(monkeypatch):
                 "qos": qos,
                 "subscribe_topics": subscribe_topics,
                 "use_tls": use_tls,
-                "tls_version": tls_version,
                 "cacerts": cacerts,
                 "insecure": insecure,
                 "mqtt_version": mqtt_version,
@@ -115,7 +113,6 @@ def test_mqtt_tls_cli_options_forwarded(monkeypatch):
     init_args = captured["init"]
     assert init_args["rx_queue_size"] == 500
     assert init_args["use_tls"] is True
-    assert init_args["tls_version"] == "tlsv1.2"
     assert init_args["cacerts"] == "/tmp/ca.pem"
     assert init_args["insecure"] is True
     assert init_args["mqtt_version"] == "3.1.1"
@@ -275,13 +272,6 @@ def test_classify_mqtt_command_topic():
     assert main.classify_mqtt_command_topic(set_p, get_p, "other/dev/set") == (
         None,
         None,
-    )
-
-
-def test_mqtt_get_response_topic():
-    assert (
-        main.mqtt_get_response_topic("modpoll/+/get", "cta_conf")
-        == "modpoll/cta_conf/get/response"
     )
 
 

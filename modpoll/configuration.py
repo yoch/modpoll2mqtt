@@ -5,7 +5,6 @@ from __future__ import annotations
 import csv
 import io
 import logging
-import math
 from collections.abc import Iterator
 from pathlib import Path
 from typing import cast
@@ -154,8 +153,6 @@ def parse_config(
                 if permissions not in ("r", "w", "rw"):
                     raise ValueError(f"Invalid permissions: {permissions}")
                 scale = float(row[6]) if len(row) > 6 and row[6] else None
-                if scale is not None and (not math.isfinite(scale) or scale == 0):
-                    raise ValueError("Scale must be finite and nonzero")
                 ref = Reference(
                     device,
                     name,
@@ -187,9 +184,42 @@ def parse_config(
                 )
         if not devices or any(not d.pollerList or not d.references for d in devices):
             raise ValueError("Each device requires at least one poller and reference")
-        return devices
     except (ValueError, IndexError, csv.Error) as exc:
         raise ConfigurationError(f"{safe_source(source)}:{line}: {exc}") from exc
+    _warn_shared_slaves(devices, logger)
+    return devices
+
+
+def _warn_shared_slaves(devices: list[Device], logger: logging.Logger) -> None:
+    by_slave: dict[int, list[str]] = {}
+    by_slave_fc: dict[tuple[int, int], list[tuple[str, int, int]]] = {}
+    for dev in devices:
+        by_slave.setdefault(dev.devid, []).append(dev.name)
+        for poller in dev.pollerList:
+            by_slave_fc.setdefault((dev.devid, poller.fc), []).append(
+                (dev.name, poller.start_address, poller.size)
+            )
+
+    slaves_with_overlap: set[int] = set()
+    for (slave_id, fc), pollers in by_slave_fc.items():
+        for i, (name_a, start_a, size_a) in enumerate(pollers):
+            end_a = start_a + size_a
+            for name_b, start_b, size_b in pollers[i + 1 :]:
+                end_b = start_b + size_b
+                if start_a < end_b and start_b < end_a:
+                    slaves_with_overlap.add(slave_id)
+                    logger.warning(
+                        f"Overlapping Modbus poll ranges on slave ID {slave_id} "
+                        f"(fc={fc}): device '{name_a}' [{start_a}, {end_a}) "
+                        f"overlaps device '{name_b}' [{start_b}, {end_b})"
+                    )
+
+    for slave_id, names in by_slave.items():
+        if len(names) > 1 and slave_id not in slaves_with_overlap:
+            logger.warning(
+                f"Modbus slave ID {slave_id} shared by logical devices: "
+                f"{', '.join(names)}"
+            )
 
 
 def read_config(

@@ -18,7 +18,9 @@ from .export import export_snapshot
 from .modbus_connection import ModbusConnectionManager
 from .modbus_task import (
     ModbusHandler,
+    WriteResults,
     format_mqtt_payload_values,
+    load_configurations,
     publish_global_diagnostics,
     setup_modbus_handlers,
 )
@@ -46,10 +48,6 @@ def extract_device_from_mqtt_topic(pattern: str, topic: str) -> str | None:
         raise ValueError("MQTT subscribe pattern requires one '+' wildcard")
     match = re.fullmatch("([^/\\n]+)".join(re.escape(p) for p in parts), topic)
     return match.group(1) if match else None
-
-
-def mqtt_get_response_topic(get_pattern: str, device_name: str) -> str:
-    return f"{get_pattern.replace('+', device_name)}/response"
 
 
 def classify_mqtt_command_topic(
@@ -149,30 +147,26 @@ def _handle_command(
                     for name in command.values
                 }
             else:
-                handler.command_expires_at = command.expires_at
-                try:
-                    result = manager.execute(
-                        "write",
-                        partial(handler.write_references, device_name, command.values),
-                    )
-                finally:
-                    handler.command_expires_at = None
+                results: WriteResults = {
+                    name: {"status": "not_attempted", "error": "transport_unavailable"}
+                    for name in command.values
+                }
+                result = manager.execute(
+                    "write",
+                    partial(
+                        handler.write_references,
+                        device_name,
+                        command.values,
+                        results,
+                        command.expires_at,
+                    ),
+                )
                 if not result.ok:
                     if result.callback_started:
                         handler.record_set_transport_failure(device_name)
                     else:
                         handler.record_set_unavailable(device_name)
-                        handler.last_write_results = {
-                            name: {
-                                "status": "not_attempted",
-                                "error": "transport_unavailable",
-                            }
-                            for name in command.values
-                        }
-                outcomes = {
-                    name: dict(result)
-                    for name, result in handler.last_write_results.items()
-                }
+                outcomes = {name: dict(entry) for name, entry in results.items()}
     else:
         result = manager.execute(
             "get", partial(handler.read_references, device_name, list(command.values))
@@ -224,6 +218,9 @@ def app(name: str = "modpoll") -> None:
     manager: ModbusConnectionManager | None = None
     failed = False
     try:
+        if args.check_config:
+            logger.info("Validated %s configuration(s)", len(load_configurations(args)))
+            return
         client, handlers = setup_modbus_handlers(args)
         manager = ModbusConnectionManager(
             client,
@@ -231,11 +228,6 @@ def app(name: str = "modpoll") -> None:
             backoff_max=args.modbus_backoff_max,
             max_connection_age=args.modbus_max_connection_age,
         )
-        if not handlers:
-            raise ConfigurationError("No Modbus configuration defined")
-        if args.check_config:
-            logger.info("Validated %s configuration(s)", len(handlers))
-            return
         if args.mqtt_host:
             password = args.mqtt_pass
             if args.mqtt_pass_file:
@@ -260,7 +252,6 @@ def app(name: str = "modpoll") -> None:
                     + ([] if args.read_only else [args.mqtt_subscribe_topic_pattern])
                 ),
                 use_tls=args.mqtt_use_tls,
-                tls_version=args.mqtt_tls_version,
                 cacerts=args.mqtt_cacerts,
                 insecure=args.mqtt_insecure,
                 mqtt_version=args.mqtt_version,
@@ -300,8 +291,6 @@ def app(name: str = "modpoll") -> None:
                     result = manager.execute("poll", handler.poll)
                     if not result.ok:
                         last_transport_ok = False
-                        if not result.callback_started:
-                            handler.on_poll_unavailable()
                     if not result.ok or result.value is False:
                         failed = True
                     if on_threading_event():
@@ -312,11 +301,15 @@ def app(name: str = "modpoll") -> None:
                             timestamp=stamp if args.timestamp else None
                         )
                     if args.export:
-                        export_snapshot(
-                            args.export,
-                            [d for h in handlers for d in h.deviceList],
-                            stamp if args.timestamp else None,
-                        )
+                        try:
+                            export_snapshot(
+                                args.export,
+                                [d for h in handlers for d in h.deviceList],
+                                stamp if args.timestamp else None,
+                            )
+                        except (OSError, ValueError) as exc:
+                            logger.error("Error exporting data: %s", exc)
+                            failed = True
                 next_poll += args.rate
                 finish = time.monotonic()
                 if next_poll <= finish:

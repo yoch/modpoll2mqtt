@@ -5,20 +5,18 @@ import logging
 import math
 import time
 from argparse import Namespace
-from collections.abc import Iterator
 
 from prettytable import PrettyTable
 from pymodbus.client import ModbusSerialClient, ModbusTcpClient, ModbusUdpClient
 from pymodbus.exceptions import ModbusException
 from pymodbus.framer import FramerType
 
-from .configuration import ConfigurationError, parse_config, read_config, safe_source
-from .export import export_snapshot
+from .configuration import ConfigurationError, read_config, safe_source
 from .modbus_models import Device, Poller, Reference
 from .mqtt_task import MqttHandler
 from .reference_common import find_device as _find_device
 from .reference_read import read_references as _read_references
-from .reference_write import validate_write
+from .reference_write import validate_write, write_validated
 from .reference_write import write_reference as _write_reference
 from .types import (
     ModbusClient,
@@ -29,7 +27,8 @@ from .types import (
 from .utils import delay_thread, on_threading_event
 
 FLOAT_TYPE_PRECISION = 3
-MQTT_GLOBAL_DIAGNOSTICS_TOPIC = "modpoll/diagnostics"
+
+WriteResults = dict[str, dict[str, str]]
 
 CSV_DELIMITER_CODES = {
     "comma": ",",
@@ -68,48 +67,12 @@ def format_mqtt_payload_values(
     return out
 
 
-def _validate_cross_device_config(
-    device_list: list[Device], logger: logging.Logger
-) -> None:
-    by_slave: dict[int, list[str]] = {}
-    by_slave_fc: dict[tuple[int, int], list[tuple[str, int, int]]] = {}
-    for dev in device_list:
-        by_slave.setdefault(dev.devid, []).append(dev.name)
-        for poller in dev.pollerList:
-            key = (dev.devid, poller.fc)
-            by_slave_fc.setdefault(key, []).append(
-                (dev.name, poller.start_address, poller.size)
-            )
-
-    slaves_with_overlap: set[int] = set()
-    for (slave_id, fc), pollers in by_slave_fc.items():
-        for i, (name_a, start_a, size_a) in enumerate(pollers):
-            end_a = start_a + size_a
-            for name_b, start_b, size_b in pollers[i + 1 :]:
-                end_b = start_b + size_b
-                if start_a < end_b and start_b < end_a:
-                    slaves_with_overlap.add(slave_id)
-                    logger.warning(
-                        f"Overlapping Modbus poll ranges on slave ID {slave_id} "
-                        f"(fc={fc}): device '{name_a}' [{start_a}, {end_a}) "
-                        f"overlaps device '{name_b}' [{start_b}, {end_b})"
-                    )
-
-    for slave_id, names in by_slave.items():
-        if len(names) > 1 and slave_id not in slaves_with_overlap:
-            logger.warning(
-                f"Modbus slave ID {slave_id} shared by logical devices: "
-                f"{', '.join(names)}"
-            )
-
-
 class ModbusHandler:
     def __init__(
         self,
         modbus_client: ModbusClient,
         config_file: str,
         mqtt_handler: MqttHandler | None = None,
-        timeout: float = 3.0,
         interval: float = 0.0,
         no_output: bool = False,
         mqtt_publish_topic_pattern: str | None = None,
@@ -117,14 +80,10 @@ class ModbusHandler:
         mqtt_single_publish: bool = False,
         mqtt_keys: str = _MQTT_KEYS_NAME_WITH_UNIT,
         autoremove: bool = False,
-        csv_delimiter_code: str = "comma",
     ) -> None:
         self.modbus_client = modbus_client
         self.config_file = config_file
-        self.csv_delimiter_code = csv_delimiter_code
-        self.csv_delimiter = CSV_DELIMITER_CODES[csv_delimiter_code]
         self.mqtt_handler = mqtt_handler
-        self.timeout = timeout
         self.interval = interval
         self.no_output = no_output
         self.mqtt_publish_topic_pattern = mqtt_publish_topic_pattern
@@ -134,33 +93,8 @@ class ModbusHandler:
         self.autoremove = autoremove
         self.recover_after = 0.0
         self.bit_write_strategy = "read-modify-write"
-        self.read_only = False
-        self.command_expires_at: float | None = None
-        self.last_write_results: dict[str, dict[str, str]] = {}
         self.deviceList: list[Device] = []
         self.logger = logging.getLogger(__name__)
-
-    def load_config(self) -> bool:
-        self.logger.info("Loading config from: %s", safe_source(self.config_file))
-        try:
-            self.deviceList = read_config(
-                self.config_file, self.csv_delimiter, self.timeout, self.logger
-            )
-            _validate_cross_device_config(self.deviceList, self.logger)
-            return True
-        except ConfigurationError as exc:
-            self.logger.error("%s", exc)
-            self.deviceList = []
-            return False
-
-    def _parse_config(self, csv_reader: Iterator[list[str]]) -> list[Device]:
-        try:
-            devices = parse_config(csv_reader, self.config_file, self.logger)
-            _validate_cross_device_config(devices, self.logger)
-            return devices
-        except ConfigurationError as exc:
-            self.logger.error("%s", exc)
-            return []
 
     def begin_poll_cycle(self) -> None:
         for dev in self.deviceList:
@@ -178,9 +112,6 @@ class ModbusHandler:
                 f"(fc={poller.fc}, start={poller.start_address}) "
                 f"after 3 consecutive failures"
             )
-
-    def on_poll_unavailable(self) -> None:
-        self.begin_poll_cycle()
 
     def poll(self) -> bool:
         all_success = True
@@ -230,28 +161,31 @@ class ModbusHandler:
         self,
         device_name: str,
         ref_values: MqttPayload,
+        results: WriteResults,
+        expires_at: float | None = None,
     ) -> None:
+        """Write a command, recording each outcome in the caller-owned ``results``.
+
+        ``results`` stays meaningful when a transport exception escapes mid-command.
+        """
         dev = _find_device(self, device_name)
         if dev is None:
             return
 
         dev.setCount += 1
-        self.last_write_results = {
-            name: {"status": "rejected", "error": "unknown_reference"}
-            for name in ref_values
-        }
-        unknown_skips = 0
-        writes: list[tuple[str, ModbusValue]] = []
+        known: list[tuple[str, ModbusValue]] = []
         for ref_name, value in ref_values.items():
-            if ref_name not in dev.references:
+            if ref_name in dev.references:
+                results[ref_name] = {"status": "not_attempted"}
+                known.append((ref_name, value))
+            else:
                 self.logger.warning(
                     f"Unknown reference '{ref_name}' on device {device_name}, skipping"
                 )
-                unknown_skips += 1
-                continue
-            writes.append((ref_name, value))
+                results[ref_name] = {"status": "rejected", "error": "unknown_reference"}
+        unknown_skips = len(ref_values) - len(known)
 
-        if not writes:
+        if not known:
             self.logger.warning(
                 f"No known references in write payload for device={device_name}"
             )
@@ -259,26 +193,14 @@ class ModbusHandler:
             dev.setErrors += 1
             return
 
-        self.last_write_results = {
-            name: {"status": "not_attempted"} for name in ref_values
-        }
-        rejected = False
+        writes: list[tuple[Reference, Poller, ModbusValue]] = []
         ranges: list[tuple[int, int, int, int | None]] = []
-        for ref_name, value in writes:
+        for ref_name, value in known:
             try:
-                if self.read_only:
-                    raise ValueError("Gateway is read-only")
                 _, ref, poller = validate_write(self, device_name, ref_name, value)
-                start = (
-                    poller.start_address + (ref.address - poller.start_address) * 8
-                    if poller.fc == 1 and ref.dtype in ("bool8", "bool16")
-                    else ref.address
-                )
-                width = (
-                    (8 if ref.dtype == "bool8" else 16)
-                    if poller.fc == 1 and ref.dtype in ("bool8", "bool16")
-                    else ref.ref_width
-                )
+                group = poller.fc == 1 and ref.dtype in ("bool8", "bool16")
+                start = poller.coil_group_start(ref) if group else ref.address
+                width = ref.group_width if group else ref.ref_width
                 for fc, left, right, bit in ranges:
                     if (
                         fc == poller.fc
@@ -290,47 +212,30 @@ class ModbusHandler:
                     ):
                         raise ValueError("Overlapping writes in one command")
                 ranges.append((poller.fc, start, start + width, ref.bit))
+                writes.append((ref, poller, value))
             except (ValueError, OverflowError) as exc:
-                rejected = True
-                self.last_write_results[ref_name] = {
-                    "status": "rejected",
-                    "error": str(exc),
-                }
-        for name in ref_values:
-            if name not in dev.references:
-                self.last_write_results[name] = {
-                    "status": "rejected",
-                    "error": "unknown_reference",
-                }
-        if rejected:
+                results[ref_name] = {"status": "rejected", "error": str(exc)}
+        if len(writes) < len(known):
             dev.setErrors += 1
             dev.setUnknownRefs += unknown_skips
             return
         ok_count = 0
-        for i, (ref_name, value) in enumerate(writes):
+        for i, (ref, poller, value) in enumerate(writes):
             if on_threading_event():
                 break
-            if (
-                self.command_expires_at is not None
-                and time.time() >= self.command_expires_at
-            ):
-                for name, _ in writes[i:]:
-                    self.last_write_results[name] = {
+            if expires_at is not None and time.time() >= expires_at:
+                for pending, _, _ in writes[i:]:
+                    results[pending.name] = {
                         "status": "not_attempted",
                         "error": "command_expired",
                     }
                 break
             try:
-                ok = self.write_reference(device_name, ref_name, value)
+                ok = write_validated(self, dev, ref, poller, value)
             except (ModbusException, OSError):
-                self.last_write_results[ref_name] = {
-                    "status": "unknown",
-                    "error": "transport_failure",
-                }
+                results[ref.name] = {"status": "unknown", "error": "transport_failure"}
                 raise
-            self.last_write_results[ref_name] = {
-                "status": "confirmed" if ok else "failed"
-            }
+            results[ref.name] = {"status": "confirmed" if ok else "failed"}
             if ok:
                 ok_count += 1
             if i < len(writes) - 1:
@@ -350,9 +255,6 @@ class ModbusHandler:
     ) -> dict[str, ModbusValue]:
         dev = _find_device(self, device_name)
         if dev is None:
-            return {}
-        if not ref_names:
-            self.logger.warning(f"Empty MQTT get payload for device={device_name}")
             return {}
 
         dev.getCount += 1
@@ -486,15 +388,6 @@ class ModbusHandler:
             )
             self.mqtt_handler.publish(topic, json.dumps(payload), retain=retain)
 
-    def export(self, file: str, timestamp: float | None = None) -> None:
-        try:
-            export_snapshot(file, self.deviceList, timestamp)
-        except (OSError, ValueError) as exc:
-            self.logger.error("Error exporting data: %s", exc)
-
-    def get_device_list(self) -> list[Device]:
-        return self.deviceList
-
 
 def count_devices_failing(modbus_handlers: list[ModbusHandler]) -> int:
     return sum(
@@ -530,42 +423,17 @@ def publish_global_diagnostics(
     )
 
 
-def setup_modbus_handlers(
-    args: Namespace, mqtt_handler: MqttHandler | None = None
-) -> tuple[ModbusClient, list[ModbusHandler]]:
-    modbus_handlers: list[ModbusHandler] = []
-    try:
-        modbus_client = (
-            ModbusTcpClient("localhost", retries=0)
-            if args.check_config
-            else _create_modbus_client(args)
-        )
-    except ValueError as exc:
-        raise ConfigurationError(str(exc)) from exc
+def load_configurations(args: Namespace) -> list[tuple[str, list[Device]]]:
+    """Load and validate every configuration file without opening a transport."""
+    logger = logging.getLogger(__name__)
+    configurations: list[tuple[str, list[Device]]] = []
     names: set[str] = set()
     for config_file in args.config:
-        modbus_handler = ModbusHandler(
-            modbus_client,
-            config_file,
-            mqtt_handler,
-            timeout=args.timeout,
-            interval=args.interval,
-            no_output=args.no_output,
-            mqtt_publish_topic_pattern=args.mqtt_publish_topic_pattern,
-            mqtt_diagnostics_topic_pattern=args.mqtt_diagnostics_topic_pattern,
-            mqtt_single_publish=args.mqtt_single,
-            mqtt_keys=args.mqtt_keys,
-            autoremove=args.autoremove,
-            csv_delimiter_code=args.csv_delimiter,
+        logger.info("Loading config from: %s", safe_source(config_file))
+        devices = read_config(
+            config_file, CSV_DELIMITER_CODES[args.csv_delimiter], args.timeout, logger
         )
-        modbus_handler.recover_after = args.poller_recover_after
-        modbus_handler.bit_write_strategy = args.modbus_bit_write
-        modbus_handler.read_only = args.read_only
-        if not modbus_handler.load_config():
-            raise ConfigurationError(
-                f"Invalid configuration: {safe_source(config_file)}"
-            )
-        for device in modbus_handler.deviceList:
+        for device in devices:
             if device.name in names:
                 raise ConfigurationError(
                     f"Duplicate device name across files: {device.name}"
@@ -579,6 +447,32 @@ def setup_modbus_handlers(
             ]
             if len(keys) != len(set(keys)) or (args.timestamp and "timestamp" in keys):
                 raise ConfigurationError(f"MQTT payload key collision on {device.name}")
+        configurations.append((config_file, devices))
+    return configurations
+
+
+def setup_modbus_handlers(args: Namespace) -> tuple[ModbusClient, list[ModbusHandler]]:
+    configurations = load_configurations(args)
+    try:
+        modbus_client = _create_modbus_client(args)
+    except ValueError as exc:
+        raise ConfigurationError(str(exc)) from exc
+    modbus_handlers: list[ModbusHandler] = []
+    for config_file, devices in configurations:
+        modbus_handler = ModbusHandler(
+            modbus_client,
+            config_file,
+            interval=args.interval,
+            no_output=args.no_output,
+            mqtt_publish_topic_pattern=args.mqtt_publish_topic_pattern,
+            mqtt_diagnostics_topic_pattern=args.mqtt_diagnostics_topic_pattern,
+            mqtt_single_publish=args.mqtt_single,
+            mqtt_keys=args.mqtt_keys,
+            autoremove=args.autoremove,
+        )
+        modbus_handler.recover_after = args.poller_recover_after
+        modbus_handler.bit_write_strategy = args.modbus_bit_write
+        modbus_handler.deviceList = devices
         modbus_handlers.append(modbus_handler)
     return modbus_client, modbus_handlers
 

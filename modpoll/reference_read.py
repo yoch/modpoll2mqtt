@@ -7,7 +7,7 @@ import struct
 from typing import Protocol
 
 from .modbus_models import Device, Poller, Reference
-from .reference_common import call_with_device_id, find_poller_for_ref
+from .reference_common import call_with_device_id
 from .types import ModbusClient, ModbusValue
 from .utils import get_utc_time
 
@@ -45,7 +45,7 @@ def read_references(
             handler.logger.warning("Reference %s is not readable", ref_name)
             read_failures += 1
             continue
-        poller = find_poller_for_ref(dev, ref)
+        poller = ref.poller
         if poller is None:
             handler.logger.error(
                 f"No poller found for reference '{ref_name}' on device {dev.name}"
@@ -73,12 +73,7 @@ def read_references(
                 read_failures += 1
                 continue
             ref.update_value(value)
-            if (
-                ref.dtype in ("bool8", "bool16")
-                and (ref.address - poller.start_address) * 8
-                + (8 if ref.dtype == "bool8" else 16)
-                > poller.size
-            ):
+            if poller.is_partial_group(ref):
                 ref.quality = "partial"
             values[ref_name] = ref.val
         except (ValueError, IndexError, struct.error, OverflowError) as e:
@@ -172,10 +167,10 @@ def _coil_read_params(ref: Reference, poller: Poller) -> tuple[int, int]:
     if ref.dtype == "bool" and ref.bit is None:
         return ref.address, 1
     if ref.dtype in ("bool8", "bool16"):
-        width = 8 if ref.dtype == "bool8" else 16
-        group_offset = ref.address - poller.start_address
-        coil_start = poller.start_address + group_offset * 8
-        return coil_start, min(width, poller.start_address + poller.size - coil_start)
+        coil_start = poller.coil_group_start(ref)
+        return coil_start, min(
+            ref.group_width, poller.start_address + poller.size - coil_start
+        )
     raise ValueError(f"Unsupported coil dtype '{ref.dtype}' for reference '{ref.name}'")
 
 

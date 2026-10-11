@@ -13,6 +13,8 @@ from paho.mqtt import MQTTException
 from paho.mqtt.client import Client as MQTTClient
 from paho.mqtt.client import MQTTMessageInfo
 from paho.mqtt.enums import CallbackAPIVersion, MQTTProtocolVersion
+from paho.mqtt.packettypes import PacketTypes
+from paho.mqtt.properties import Properties
 from paho.mqtt.subscribeoptions import SubscribeOptions
 
 from .commands import decode_json
@@ -34,7 +36,6 @@ class MqttHandler:
         qos: int,
         subscribe_topics: list[str] | None = None,
         use_tls: bool = False,
-        tls_version: str = "tlsv1.2",
         cacerts: str | None = None,
         insecure: bool = False,
         mqtt_version: str = "5.0",
@@ -58,7 +59,6 @@ class MqttHandler:
         self.qos = qos
         self.subscribe_topics: list[str] = subscribe_topics or []
         self.use_tls = use_tls
-        self.tls_version = tls_version
         self.cacerts = cacerts
         self.insecure = insecure
         self.mqtt_version = mqtt_version
@@ -85,10 +85,9 @@ class MqttHandler:
         self.expired_messages = 0
         self.publish_errors = 0
         self.subscription_errors = 0
-        self.rx_queue_size = rx_queue_size
         self.retain_data_publishes = retain_data_publishes
-        self.rx_queue: queue.Queue[tuple[str, bytes] | tuple[str, bytes, float]] = (
-            queue.Queue(maxsize=rx_queue_size)
+        self.rx_queue: queue.Queue[tuple[str, bytes, float]] = queue.Queue(
+            maxsize=rx_queue_size
         )
         self._connected_event = Event()
         self._connect_rc: int | None = None
@@ -249,9 +248,6 @@ class MqttHandler:
         if self.mqtt_client is None:
             return False
         try:
-            if self.tls_version.lower() != "tlsv1.2":
-                self.logger.error("TLS 1.0/1.1 are unsupported; use TLS 1.2 minimum")
-                return False
             context = ssl.create_default_context(cafile=self.cacerts)
             context.minimum_version = ssl.TLSVersion.TLSv1_2
             if self.insecure:
@@ -329,9 +325,6 @@ class MqttHandler:
                 retain=True,
             )
             if self.mqtt_version == "5.0":
-                from paho.mqtt.packettypes import PacketTypes
-                from paho.mqtt.properties import Properties
-
                 properties = Properties(PacketTypes.CONNECT)
                 properties.SessionExpiryInterval = self.session_expiry
                 self.mqtt_client.connect_async(
@@ -454,12 +447,11 @@ class MqttHandler:
         while True:
             try:
                 with self._rx_lock:
-                    item = self.rx_queue.get(block=False)
-                    topic, payload = item[0], item[1]
+                    topic, payload, received_at = self.rx_queue.get(block=False)
                     self._queued_bytes = max(0, self._queued_bytes - len(payload))
                     if self.rx_queue.empty():
                         self.wakeup.clear()
-                if len(item) == 3 and time.monotonic() - item[2] > self.command_ttl:
+                if time.monotonic() - received_at > self.command_ttl:
                     self.expired_messages += 1
                     self._publish_rejection(topic, payload, "queue_expired")
                     continue

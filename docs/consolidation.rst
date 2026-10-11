@@ -161,7 +161,8 @@ consumers must use freshness diagnostics, not process presence alone.
 temporary file beside the destination, flush/fsync and atomic replacement.
 Unavailable references are null. ``--timestamp`` records the cycle timestamp
 inside each device object. It is not a per-reference acquisition timestamp.
-There is no promise of directory-fsync durability after a power loss.
+There is no promise of directory-fsync durability after a power loss. A failed
+export is logged and polling continues; with ``--once`` it causes exit status 1.
 
 MQTT deployment and lifecycle
 -----------------------------

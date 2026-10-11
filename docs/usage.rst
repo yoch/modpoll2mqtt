@@ -51,7 +51,7 @@ If columns are not split correctly (for example tab-separated files), use ``--cs
 Export
 ------
 
-``--export`` atomically replaces a JSON snapshot containing all configuration files. A failure before replacement preserves the previous file. It writes polled reference values to a JSON file keyed by device name, then by reference name. Use ``--timestamp`` to add a ``timestamp`` field to each device's export object and to grouped MQTT publish payloads.
+``--export`` atomically replaces a JSON snapshot containing all configuration files. A failure before replacement preserves the previous file; it is logged without stopping the gateway, and makes ``--once`` exit with status 1. It writes polled reference values to a JSON file keyed by device name, then by reference name. Use ``--timestamp`` to add a ``timestamp`` field to each device's export object and to grouped MQTT publish payloads.
 
 .. code-block:: shell
 

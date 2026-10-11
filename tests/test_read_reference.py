@@ -1,5 +1,3 @@
-from unittest.mock import MagicMock
-
 import pytest
 from tests.helpers.modbus import FakeModbusMaster, handler_with_device
 
@@ -142,17 +140,3 @@ def test_read_modbus_error_returns_empty():
     assert device.getCount == 1
     assert device.getErrors == 1
     assert device.getReadErrors == 1
-
-
-def test_read_empty_payload_does_not_count_attempt(caplog):
-    device = Device("dev", 1)
-    device.pollerList = []
-    device.references = {}
-
-    handler = handler_with_device(device, MagicMock())
-    with caplog.at_level("WARNING"):
-        assert handler.read_references("dev", []) == {}
-
-    assert device.getErrors == 0
-    assert device.getCount == 0
-    assert "Empty MQTT get payload" in caplog.text

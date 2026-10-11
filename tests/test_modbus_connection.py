@@ -43,9 +43,9 @@ def test_connect_failure_enters_non_blocking_backoff():
     second = manager.execute("poll", lambda: "never")
 
     assert first.ok is False
-    assert first.skipped is True
+    assert first.callback_started is False
     assert second.ok is False
-    assert second.skipped is True
+    assert second.callback_started is False
     assert client.connect.call_count == 1
     assert manager.state == manager.BACKOFF
     assert manager.backoff_until == 105.0
@@ -159,7 +159,7 @@ def test_connect_exception_enters_backoff_without_callback(exc):
     result = manager.execute("poll", callback)
 
     assert result.ok is False
-    assert result.skipped is True
+    assert result.callback_started is False
     assert result.callback_started is False
     callback.assert_not_called()
     assert client.close.call_count == 0

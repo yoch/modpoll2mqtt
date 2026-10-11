@@ -1,10 +1,11 @@
-import ssl
+import time
 
 import pytest
 from paho.mqtt.client import ConnectFlags
 from paho.mqtt.packettypes import PacketTypes
 from paho.mqtt.reasoncodes import ReasonCode
 
+from modpoll.arg_parser import get_parser
 from modpoll.mqtt_task import MqttHandler
 
 
@@ -87,7 +88,7 @@ def test_receive_returns_message_when_available():
 
     class FakeQueue:
         def get(self, block=False):
-            return ("some/topic", b"payload")
+            return ("some/topic", b"payload", time.monotonic())
 
         def empty(self):
             return True
@@ -176,25 +177,9 @@ def test_publish_data_message_uses_handler_qos_and_retain(
     assert stub.calls == [("data/topic", "payload", qos, expected_retain)]
 
 
-def test_mqtt_tlsv1_unsupported_returns_false_from_setup(monkeypatch):
-    handler = MqttHandler(
-        name="test_mqtt",
-        host="broker.emqx.io",
-        port=8883,
-        user=None,
-        password=None,
-        clientid="client",
-        qos=0,
-        use_tls=True,
-        tls_version="tlsv1",
-        cacerts="/tmp/ca.pem",
-        mqtt_version="3.1.1",
-    )
-
-    if hasattr(ssl, "PROTOCOL_TLSv1"):
-        monkeypatch.delattr(ssl, "PROTOCOL_TLSv1", raising=False)
-
-    assert handler.setup() is False
+def test_cli_rejects_tls_below_1_2():
+    with pytest.raises(SystemExit):
+        get_parser().parse_args(["-f", "x.csv", "--mqtt-tls-version", "tlsv1"])
 
 
 def test_setup_respects_tls_option(monkeypatch):
@@ -209,7 +194,6 @@ def test_setup_respects_tls_option(monkeypatch):
         qos=0,
         subscribe_topics=["secure/topic"],
         use_tls=True,
-        tls_version="tlsv1.2",
         mqtt_version="3.1.1",
     )
 

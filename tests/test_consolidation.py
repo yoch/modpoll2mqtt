@@ -24,7 +24,11 @@ from modpoll.configuration import (
 )
 from modpoll.export import export_snapshot
 from modpoll.modbus_connection import ModbusConnectionManager
-from modpoll.modbus_task import ModbusHandler, setup_modbus_handlers
+from modpoll.modbus_task import (
+    ModbusHandler,
+    load_configurations,
+    setup_modbus_handlers,
+)
 from modpoll.mqtt_task import MqttHandler
 from modpoll.register_decode import ENDIAN_MAP, RegisterEncoder
 from modpoll.utils import clear_threading_event
@@ -183,12 +187,12 @@ def test_decode_failure_clears_snapshot_but_preserves_last_success():
     last_success = ref.last_success_at
     master.registers[0] = 0xFFFF
     assert handler.poll() is False
-    assert ref.val is None and ref.last_value == "AB"
+    assert ref.val is None
     assert ref.quality == "unavailable" and ref.last_success_at == last_success
     assert handler.deviceList[0].references["value"].val == 7
     assert handler.deviceList[0].pollSuccess
     attempt = ref.last_attempt_at
-    handler.on_poll_unavailable()
+    handler.begin_poll_cycle()
     assert ref.last_attempt_at == attempt
 
 
@@ -220,22 +224,28 @@ def test_batch_prevalidation_and_uncertain_transport_results():
         CONFIG
         + "ref,first,0,uint16,rw\nref,second,1,uint16,rw\nref,third,2,uint16,rw\n"
     )
-    handler.write_references("dev", {"first": 1, "second": -1})
+    results = {}
+    handler.write_references("dev", {"first": 1, "second": -1}, results)
     assert not handler.modbus_client.writes
-    assert handler.last_write_results["first"]["status"] == "not_attempted"
-    assert handler.last_write_results["second"]["status"] == "rejected"
+    assert results["first"]["status"] == "not_attempted"
+    assert results["second"]["status"] == "rejected"
     handler.modbus_client.write_register = MagicMock(
         side_effect=[FakeModbusResult(), OSError("lost ACK")]
     )
     manager = ModbusConnectionManager(handler.modbus_client)
+    results = {}
     result = manager.execute(
         "write",
-        lambda: handler.write_references("dev", {"first": 1, "second": 2, "third": 3}),
+        lambda: handler.write_references(
+            "dev", {"first": 1, "second": 2, "third": 3}, results
+        ),
     )
     assert not result.ok
-    assert {
-        name: entry["status"] for name, entry in handler.last_write_results.items()
-    } == {"first": "confirmed", "second": "unknown", "third": "not_attempted"}
+    assert {name: entry["status"] for name, entry in results.items()} == {
+        "first": "confirmed",
+        "second": "unknown",
+        "third": "not_attempted",
+    }
     assert handler.modbus_client.write_register.call_count == 2
 
 
@@ -331,10 +341,10 @@ def test_dispatch_deduplicates_write_and_rejects_malformed_without_crashing():
 def test_expiry_during_connection_prevents_write():
     clear_threading_event()
     handler = handler_for(CONFIG + "ref,value,0,uint16,rw\n")
-    handler.command_expires_at = time.time() - 1
-    handler.write_references("dev", {"value": 1})
+    results = {}
+    handler.write_references("dev", {"value": 1}, results, time.time() - 1)
     assert not handler.modbus_client.writes
-    assert handler.last_write_results["value"]["error"] == "command_expired"
+    assert results["value"]["error"] == "command_expired"
 
 
 def test_mqtt_retained_byte_budget_age_and_nonretained_responses(monkeypatch):
@@ -421,11 +431,10 @@ def test_offline_validation_and_cross_file_duplicates(tmp_path, monkeypatch):
         "modpoll.modbus_task._create_modbus_client",
         MagicMock(side_effect=AssertionError("No transport")),
     )
-    _, handlers = setup_modbus_handlers(args)
-    assert len(handlers) == 1
+    assert len(load_configurations(args)) == 1
     args.config.append(str(config))
     with pytest.raises(ConfigurationError, match="Duplicate device"):
-        setup_modbus_handlers(args)
+        load_configurations(args)
     assert (
         safe_source("https://user:secret@example.com/config.csv?token=secret")
         == "https://example.com/config.csv"
@@ -446,6 +455,24 @@ def test_once_returns_failure_and_always_closes_transport(monkeypatch):
         main.app()
     assert error.value.code == 1
     assert master.close_count == 1
+
+
+def test_export_failure_is_logged_and_fails_once(monkeypatch, tmp_path, caplog):
+    clear_threading_event()
+    master = FakeModbusMaster(registers=[0] * 8)
+    handler = handler_for(CONFIG + "ref,value,0,uint16,r\n", master)
+    monkeypatch.setattr(main, "setup_modbus_handlers", lambda args: (master, [handler]))
+    export = tmp_path / "missing" / "out.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["modpoll", "-f", "dummy.csv", "--tcp", "h", "--once", "--export", str(export)],
+    )
+    with pytest.raises(SystemExit) as error:
+        main.app()
+    assert error.value.code == 1
+    assert "Error exporting data" in caplog.text
+    assert "Gateway failed" not in caplog.text
 
 
 @pytest.mark.parametrize(
@@ -507,6 +534,21 @@ def test_read_only_dispatch_never_connects_to_write():
     assert handler.modbus_client.connect_count == 0 and not handler.modbus_client.writes
     reply = json.loads(mqtt.publish_response.call_args.args[1])
     assert reply["results"]["value"]["error"] == "read_only"
+
+
+def test_empty_legacy_get_is_ignored_without_counting(caplog):
+    args = get_parser().parse_args(["--config", "dummy.csv", "--tcp", "localhost"])
+    handler = handler_for(CONFIG + "ref,value,0,uint16,r\n")
+    mqtt = MagicMock()
+    manager = ModbusConnectionManager(handler.modbus_client)
+    with caplog.at_level("WARNING"):
+        main._handle_command(
+            args, mqtt, [handler], manager, RequestCache(), "modpoll/dev/get", b"{}"
+        )
+    assert handler.deviceList[0].getCount == 0
+    assert handler.modbus_client.connect_count == 0
+    mqtt.publish_response.assert_not_called()
+    assert "Empty MQTT get payload" in caplog.text
 
 
 def test_ambiguous_command_topics_rejected():

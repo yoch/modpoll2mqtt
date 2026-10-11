@@ -3,7 +3,6 @@ from unittest.mock import MagicMock
 
 from modpoll.modbus_models import Device
 from modpoll.modbus_task import (
-    MQTT_GLOBAL_DIAGNOSTICS_TOPIC,
     ModbusHandler,
     count_devices_failing,
     publish_global_diagnostics,
@@ -42,7 +41,7 @@ def test_publish_global_diagnostics():
 
     mqtt.publish.assert_called_once()
     topic, body = mqtt.publish.call_args[0]
-    assert topic == MQTT_GLOBAL_DIAGNOSTICS_TOPIC
+    assert topic == "modpoll/diagnostics"
     assert json.loads(body) == {
         "mqtt_connected": True,
         "modbus_ok": True,

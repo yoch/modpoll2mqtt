@@ -104,10 +104,8 @@ class Poller:
                     failures += 1
                 else:
                     successes += 1
-                if self.fc in (1, 2) and ref.dtype in ("bool8", "bool16"):
-                    width = 8 if ref.dtype == "bool8" else 16
-                    if (ref.address - self.start_address) * 8 + width > self.size:
-                        ref.quality = "partial"
+                if self.is_partial_group(ref):
+                    ref.quality = "partial"
             except (ValueError, IndexError, struct.error, OverflowError) as exc:
                 ref.update_value(None)
                 failures += 1
@@ -116,6 +114,19 @@ class Poller:
         if successes:
             self.device.pollSuccess = True
         return failures == 0
+
+    def coil_group_start(self, ref: Reference) -> int:
+        """First coil of a bool8/bool16 group; groups are 8 coils apart."""
+        return self.start_address + (ref.address - self.start_address) * 8
+
+    def is_partial_group(self, ref: Reference) -> bool:
+        """True when a coil bool8/bool16 group extends past this poller."""
+        return (
+            self.fc in (1, 2)
+            and ref.dtype in ("bool8", "bool16")
+            and self.coil_group_start(ref) + ref.group_width
+            > self.start_address + self.size
+        )
 
     def get_decoder(self, data: list[int]) -> RegisterDecoder:
         byteorder, wordorder = ENDIAN_MAP[self.endian.strip().upper()]
@@ -135,11 +146,9 @@ class Poller:
             bit_offset = ref.address - read_start
             return bool(bits[bit_offset])
         if ref.dtype in ("bool8", "bool16"):
-            group_offset = ref.address - self.start_address
-            bit_offset = group_offset * 8 - (read_start - self.start_address)
-            width = 8 if ref.dtype == "bool8" else 16
-            values = bits[bit_offset : bit_offset + width]
-            return values + [False] * (width - len(values))
+            bit_offset = self.coil_group_start(ref) - read_start
+            values = bits[bit_offset : bit_offset + ref.group_width]
+            return values + [False] * (ref.group_width - len(values))
         raise ValueError(
             f"Unsupported dtype '{ref.dtype}' on coil/discrete_input poller"
         )
@@ -166,9 +175,8 @@ class Poller:
             return bool((register_value >> ref.bit) & 1)
 
         if ref.dtype in ("bool8", "bool16"):
-            width = 8 if ref.dtype == "bool8" else 16
             word = decoder.decode_16bit_uint()
-            return [bool((word >> i) & 1) for i in range(width)]
+            return [bool((word >> i) & 1) for i in range(ref.group_width)]
 
         decode_methods = {
             "uint16": decoder.decode_16bit_uint,
@@ -265,7 +273,6 @@ class Reference:
             raise ValueError("Scale must be finite and nonzero")
         self.scale = scale
         self.val: ModbusValue = None
-        self.last_value: ModbusValue = None
         self.last_success_at: float | None = None
         self.last_attempt_at: float | None = None
         self.quality = "unavailable"
@@ -285,6 +292,11 @@ class Reference:
     def __repr__(self):
         addr = f"{self.address}:{self.bit}" if self.bit is not None else self.address
         return f"<Reference {self.name}@{addr}>"
+
+    @property
+    def group_width(self) -> int:
+        """Bit count of a bool8/bool16 group."""
+        return 8 if self.dtype == "bool8" else 16
 
     def _get_ref_width(self) -> int:
         width_map = {
@@ -338,5 +350,4 @@ class Reference:
         self.val = v
         self.quality = "good" if v is not None else "unavailable"
         if v is not None:
-            self.last_value = v
             self.last_success_at = self.last_attempt_at
