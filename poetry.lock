@@ -721,10 +721,9 @@ simulator = ["aiohttp (>=3.13.2) ; python_version >= \"3.12\"", "aiohttp (>=3.8.
 name = "pyserial"
 version = "3.5"
 description = "Python Serial Port Extension"
-optional = true
+optional = false
 python-versions = "*"
 groups = ["main"]
-markers = "extra == \"serial\""
 files = [
     {file = "pyserial-3.5-py2.py3-none-any.whl", hash = "sha256:c4451db6ba391ca6ca299fb3ec7bae67a5c55dde170964c7a14ceefec02f2cf0"},
     {file = "pyserial-3.5.tar.gz", hash = "sha256:3c77e014170dfffbd816e6ffc205e9842efb10be9f58ec16d3e8675b4925cddb"},
@@ -1522,4 +1521,4 @@ serial = ["pyserial"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<4.0"
-content-hash = "94b88d348654db84597e1386eecf8a36e28725140119f261f1d9098f79bf031e"
+content-hash = "fd95d9c2f7231d15ec00b6979f141051b96b49b18802fffd7091e5aabb261194"

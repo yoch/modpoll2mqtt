@@ -21,6 +21,7 @@
 * ignore retained commands (MQTT 5 preserves retain on live delivery), reject malformed/duplicate-key JSON, bound incoming/outgoing queues, reconnect MQTT asynchronously, and republish retained presence after reconnect
 * aggregate all configurations into one atomic JSON export and report partial writes/uncertain acknowledgements without blind replay
 * repair shipped SDM120M permissions, SmartLogger dtype, and TriStar duplicate names (second occurrences use their address suffix)
+* require pyserial so the package still imports with pymodbus 3.16.0, which fails without it ([pymodbus#3042](https://github.com/pymodbus-dev/pymodbus/issues/3042)); the `serial` extra is kept for compatibility
 
 ### BREAKING CHANGES
 
@@ -35,7 +36,6 @@
 * add regression coverage for the audit defects, all supported numeric endians, strict commands, batch prevalidation, lost acknowledgements, queue budgets, recovery, atomic export, and exit codes
 * run real CLI/Modbus/MQTT 5 and 3.1.1 exchanges with local Mosquitto and independent slave/object spaces; required CI integration cannot silently skip missing infrastructure
 * test minimum/latest pymodbus, install built wheels outside the source tree with the serial extra, build docs with warnings as errors on PRs, and require these gates before publishing
-
 ## [2.2.1](https://github.com/yoch/modpoll2mqtt/compare/v2.2.0...v2.2.1) (2026-06-16)
 
 ### Internal
