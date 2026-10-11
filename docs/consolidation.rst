@@ -1,8 +1,9 @@
 Operation and migration from 2.2.1
 ==================================
 
-These behaviors apply to the unreleased consolidation changes. The package
-version is unchanged until the maintainer prepares a release.
+These behaviors apply from 2.3.0. That release contains breaking changes
+despite its minor version number; see the BREAKING CHANGES section of the
+:doc:`changelog` before upgrading from 2.2.x.
 
 Configuration and codecs
 ------------------------

@@ -268,6 +268,8 @@ Subscribe pattern (default): ``modpoll/+/get``. Publish to ``modpoll/{device}/ge
 - Reads use targeted Modbus requests (minimal register/coil count per reference), not a full poller block.
 - Uses the shared persistent Modbus connection; if the connection is in backoff, the request fails quickly and returns an empty response.
 
+**Breaking change (2.3.0+):** legacy SET validates every known value before any write, rejects conflicting ranges in one command, and publishes per-reference ``results`` on ``<request-topic>/response`` (never retained). Retained commands are discarded.
+
 **Breaking change (2.1.0+):** the ``ref``/``value`` object format is no longer supported; use a reference map instead.
 
 **Breaking change (2.0.0+):** the previous low-level format (``object_type``, ``address``, ``value``) is no longer supported.
@@ -277,3 +279,10 @@ Consolidation and migration
 
 See :doc:`consolidation` for versioned commands, freshness, retry policy,
 resource limits, TLS, read-only operation, exit codes, and migration from 2.2.1.
+
+**Breaking changes (2.3.0+):** invalid CSV rows abort startup with exit 2 (run
+``--check-config`` first); out-of-range, non-finite and fractional unscaled
+integer writes are rejected instead of wrapped or truncated; TLS 1.0/1.1 are
+refused; MQTT sessions are ephemeral at every QoS unless ``--mqtt-clientid`` and
+``--mqtt-session-expiry`` are set; ``--once`` polls only and exits 1 on failure;
+TriStar duplicate reference names in ``contrib/`` are renamed.

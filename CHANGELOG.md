@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [2.3.0](https://github.com/yoch/modpoll2mqtt/compare/v2.2.1...v2.3.0) (2026-10-11)
+
 ### Features
 
 * add `--check-config` for whole-configuration validation without opening Modbus/MQTT transports
@@ -30,6 +32,7 @@
 * TLS 1.0/1.1 are rejected; sessions are ephemeral by default at every QoS; explicit persistent sessions require `--mqtt-clientid`
 * `--once` runs polling only and returns 1 on poll/runtime/MQTT publication failure; command responses are never retained, even with `--mqtt-retain`
 * legacy SET now returns per-reference results on `<request-topic>/response`; all known writes are validated before any are attempted, and conflicting ranges in a single command are rejected
+* shipped `contrib/` configurations changed: TriStar duplicate names are renamed (their MQTT topics and payload keys change), SDM120M permissions and the SmartLogger dtype are corrected
 
 ### Tests and CI
 
