@@ -13,6 +13,7 @@ from paho.mqtt import MQTTException
 from paho.mqtt.client import Client as MQTTClient
 from paho.mqtt.client import MQTTMessageInfo
 from paho.mqtt.enums import CallbackAPIVersion, MQTTProtocolVersion
+from paho.mqtt.subscribeoptions import SubscribeOptions
 
 from .commands import decode_json
 from .utils import delay_thread, on_threading_event
@@ -119,7 +120,13 @@ class MqttHandler:
             self.logger.info("Created new MQTT session.")
         for topic in self.subscribe_topics:
             self.logger.info(f"Subscribe to topic: {topic} with QoS: {self.qos}")
-            rc, _ = client.subscribe(topic, self.qos)
+            if self.mqtt_version == "5.0":
+                rc, _ = client.subscribe(
+                    topic,
+                    options=SubscribeOptions(qos=self.qos, retainAsPublished=True),
+                )
+            else:
+                rc, _ = client.subscribe(topic, self.qos)
             if rc != 0:
                 self.subscription_errors += 1
         self.publish_status(True)

@@ -129,6 +129,12 @@ def test_cli_command_export_retained_dedup_and_shutdown(
         observer.wait("/status", lambda p: p.get("online") is True)
         observer.wait("/one/data", lambda p: p.get("value") == 0)
         assert modbus.read_holding_registers(60, count=1, device_id=1).registers == [0]
+        if version == "5.0":
+            # Retain As Published exposes retained live commands, not only replay.
+            observer.publish("/one/set", '{"value": 99}', retain=True)
+            observer.publish("/one/get", '{"value": null}')
+            live_retained, _ = observer.wait("/one/get/response")
+            assert live_retained == {"value": 0}
         observer.publish("/one/set", b"\xff")
         command = json.dumps(
             {

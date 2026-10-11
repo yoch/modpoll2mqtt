@@ -108,7 +108,11 @@ Restarting the process clears the cache. A cached result describes the original
 execution and does not assert the current value. Publisher formatting must be
 stable if it retries a request.
 
-All incoming retained commands are discarded. Queue admission is distinct from
+All commands delivered with the retained flag are discarded. MQTT 5 subscriptions
+use Retain As Published to detect retained live publications as well as replay.
+MQTT 3.1.1 does not expose a publisher's retain flag on live delivery; broker ACLs
+and publishers must prohibit retained command publication for that case.
+Queue admission is distinct from
 MQTT delivery acknowledgement: the broker's PUBACK does not mean execution.
 Small versioned requests rejected for retention, queue saturation, or queue
 expiry receive a best-effort rejection response. Oversized/malformed requests

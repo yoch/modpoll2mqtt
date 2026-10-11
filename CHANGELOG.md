@@ -18,7 +18,7 @@
 * reject unsafe numeric writes before bus I/O; make register bit writes inverse to decoding; target only the declared coil group
 * clear failed/short/non-finite decodes without retaining a stale current value; isolate a malformed UTF-8 string from other references
 * saturate reconnect backoff, schedule with monotonic time, avoid counting unattempted polls, disable pymodbus write retries, and guarantee transport cleanup
-* ignore retained commands, reject malformed/duplicate-key JSON, bound incoming/outgoing queues, reconnect MQTT asynchronously, and republish retained presence after reconnect
+* ignore retained commands (MQTT 5 preserves retain on live delivery), reject malformed/duplicate-key JSON, bound incoming/outgoing queues, reconnect MQTT asynchronously, and republish retained presence after reconnect
 * aggregate all configurations into one atomic JSON export and report partial writes/uncertain acknowledgements without blind replay
 * repair shipped SDM120M permissions, SmartLogger dtype, and TriStar duplicate names (second occurrences use their address suffix)
 
