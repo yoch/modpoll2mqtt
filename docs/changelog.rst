@@ -1,6 +1,20 @@
 Changelog
 =========
 
+`2.3.1 <https://github.com/yoch/modpoll2mqtt/compare/v2.3.0...v2.3.1>`__ (2026-10-11)
+-------------------------------------------------------------------------------------
+
+Fixes
+~~~~~
+
+-  make pyserial optional again now that pymodbus 3.16.1 imports without
+   it
+   (`pymodbus#3042 <https://github.com/pymodbus-dev/pymodbus/issues/3042>`__);
+   pymodbus 3.16.0 is excluded. Serial/RTU users install
+   ``modpoll2mqtt[serial]``, as before 2.3.0
+
+.. _section-1:
+
 `2.3.0 <https://github.com/yoch/modpoll2mqtt/compare/v2.2.1...v2.3.0>`__ (2026-10-11)
 -------------------------------------------------------------------------------------
 
@@ -24,6 +38,8 @@ Features
    sessions, and file-based credentials
 -  expose per-reference quality/acquisition times and MQTT
    rejection/publication/subscription counters in diagnostics
+
+.. _fixes-1:
 
 Fixes
 ~~~~~
@@ -111,7 +127,7 @@ Tests
 
 -  import device models from ``modpoll.modbus_models`` in unit tests
 
-.. _section-1:
+.. _section-2:
 
 `2.2.0 <https://github.com/yoch/modpoll2mqtt/compare/v2.1.2...v2.2.0>`__ (2026-06-16)
 -------------------------------------------------------------------------------------
@@ -178,7 +194,7 @@ Tests
    diagnostic counters
 -  migrate Modbus lifecycle tests to ``ModbusConnectionManager``
 
-.. _section-2:
+.. _section-3:
 
 `2.1.2 <https://github.com/yoch/modpoll2mqtt/compare/v2.1.1...v2.1.2>`__ (2026-06-15)
 -------------------------------------------------------------------------------------
@@ -215,7 +231,7 @@ Tests
 -  consolidate handler regression/contract tests; share
    ``FakeModbusMaster`` in ``tests/helpers/modbus.py``
 
-.. _section-3:
+.. _section-4:
 
 `2.1.1 <https://github.com/yoch/modpoll2mqtt/compare/v2.1.0...v2.1.1>`__ (2026-06-11)
 -------------------------------------------------------------------------------------
@@ -246,7 +262,7 @@ Internal
 -  centralize MQTT data publish policy (QoS and retain) in
    ``MqttHandler.publish_data_message``
 
-.. _section-4:
+.. _section-5:
 
 `2.1.0 <https://github.com/yoch/modpoll2mqtt/compare/v2.0.0...v2.1.0>`__ (2026-06-10)
 -------------------------------------------------------------------------------------
@@ -272,7 +288,7 @@ BREAKING CHANGES
 -  MQTT write payload must be a reference map (``{"ref": val}``);
    ``ref``/``value`` object format removed
 
-.. _section-5:
+.. _section-6:
 
 `2.0.0 <https://github.com/yoch/modpoll2mqtt/compare/v1.6.0...v2.0.0>`__ (2026-06-10)
 -------------------------------------------------------------------------------------

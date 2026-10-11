@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [2.3.1](https://github.com/yoch/modpoll2mqtt/compare/v2.3.0...v2.3.1) (2026-10-11)
+
 ### Fixes
 
 * make pyserial optional again now that pymodbus 3.16.1 imports without it ([pymodbus#3042](https://github.com/pymodbus-dev/pymodbus/issues/3042)); pymodbus 3.16.0 is excluded. Serial/RTU users install `modpoll2mqtt[serial]`, as before 2.3.0
