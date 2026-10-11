@@ -12,9 +12,11 @@ Install with pip or pipx
 
     pip install modpoll2mqtt
 
-pyserial, used for Modbus-RTU communication, is installed by default. The
-``serial`` extra is kept so existing ``pip install 'modpoll2mqtt[serial]'``
-commands keep working.
+Optionally, install pyserial for Modbus-RTU communication:
+
+.. code-block:: shell
+
+    pip install 'modpoll2mqtt[serial]'
 
 Upgrade:
 
