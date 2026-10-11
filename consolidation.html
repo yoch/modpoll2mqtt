@@ -1,0 +1,317 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Operation and migration from 2.2.1 &mdash; modpoll2mqtt 2.3.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=c3c8ae58"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Changelog" href="changelog.html" />
+    <link rel="prev" title="Configuration" href="configure.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            modpoll2mqtt
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Basic Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configure.html">Configuration</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Operation and migration from 2.2.1</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#configuration-and-codecs">Configuration and codecs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#writes-and-acknowledgements">Writes and acknowledgements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#versioned-command-protocol">Versioned command protocol</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#resources-scheduling-and-recovery">Resources, scheduling, and recovery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mqtt-deployment-and-lifecycle">MQTT deployment and lifecycle</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#validation-and-remaining-field-work">Validation and remaining field work</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">modpoll2mqtt</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Operation and migration from 2.2.1</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/consolidation.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="operation-and-migration-from-2-2-1">
+<h1>Operation and migration from 2.2.1<a class="headerlink" href="#operation-and-migration-from-2-2-1" title="Link to this heading"></a></h1>
+<p>These behaviors apply from 2.3.0. That release contains breaking changes
+despite its minor version number; see the BREAKING CHANGES section of the
+<a class="reference internal" href="changelog.html"><span class="doc">Changelog</span></a> before upgrading from 2.2.x.</p>
+<section id="configuration-and-codecs">
+<h2>Configuration and codecs<a class="headerlink" href="#configuration-and-codecs" title="Link to this heading"></a></h2>
+<p>Run <code class="docutils literal notranslate"><span class="pre">modpoll</span> <span class="pre">--check-config</span> <span class="pre">--config</span> <span class="pre">a.csv</span> <span class="pre">b.csv</span></code> before deploying. Every
+source is validated as one set before transport startup. An invalid row aborts
+the run with a source/line error. A reference belongs to its declared poller,
+including function code and endian, even when ranges overlap. Identical pollers
+reuse their block; different reference names can alias the same address.</p>
+<p>Addresses are literal protocol addresses in 0..65535. There is no conversion
+from a vendor’s 1-based numbering or 40001-style labels. Device ID 0/broadcast is
+unsupported. TCP/UDP allows IDs 1..255; serial allows 1..247.</p>
+<p>Numeric bounds are checked before I/O. Unscaled integers require integral
+values. Scaled integer writes divide by scale and use Python’s rounding
+(nearest, ties to even); reads multiply by scale. Scale must be finite/nonzero.
+Floats must fit the selected IEEE representation and be finite. <code class="docutils literal notranslate"><span class="pre">stringN</span></code>
+accepts N UTF-8 bytes and reserves <code class="docutils literal notranslate"><span class="pre">ceil(N/2)</span></code> registers, padding with zeros.
+It never truncates a multi-byte character.</p>
+<p>For register bits, <code class="docutils literal notranslate"><span class="pre">address:bit</span></code> selects bit 0..15 of the decoded 16-bit word.
+<code class="docutils literal notranslate"><span class="pre">bool8</span></code> and <code class="docutils literal notranslate"><span class="pre">bool16</span></code> both occupy one register. Coil groups retain their
+legacy convention: group address <code class="docutils literal notranslate"><span class="pre">A</span></code> in a poller starting at <code class="docutils literal notranslate"><span class="pre">S</span></code> maps to
+physical coil <code class="docutils literal notranslate"><span class="pre">S</span> <span class="pre">+</span> <span class="pre">(A-S)*8</span></code>; <code class="docutils literal notranslate"><span class="pre">bool16</span></code> spans two such groups. Incomplete
+read groups are padded with false and marked <code class="docutils literal notranslate"><span class="pre">partial</span></code>. Writing an incomplete
+group is rejected; writing a complete group touches only its 8/16 coils.</p>
+</section>
+<section id="writes-and-acknowledgements">
+<h2>Writes and acknowledgements<a class="headerlink" href="#writes-and-acknowledgements" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">--read-only</span></code> disables legacy SET subscriptions and rejects versioned SET,
+as well as handler writes. GET respects the CSV <code class="docutils literal notranslate"><span class="pre">r</span></code> permission. Protocol
+input objects remain read-only regardless of CSV permissions.</p>
+<p>Every known value in a SET is validated before any bus I/O. Overlapping writes
+in the same command are rejected, except distinct bits in one register.
+Legacy commands skip unknown names and report them; versioned SET rejects a
+command containing any unknown reference. Several Modbus requests are not an
+atomic transaction and are never rolled back.</p>
+<p><code class="docutils literal notranslate"><span class="pre">--modbus-bit-write</span> <span class="pre">read-modify-write</span></code> is the default for register bits; it
+preserves other bits but is non-atomic against other bus masters. Opt in to
+<code class="docutils literal notranslate"><span class="pre">--modbus-bit-write</span> <span class="pre">mask</span></code> only for devices implementing FC22. It performs an
+atomic mask request and never silently falls back when unsupported. Pymodbus
+request retries are disabled, so an uncertain write is not automatically replayed.</p>
+<p>A SET result is one of:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Status</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">confirmed</span></code></p></td>
+<td><p>The device returned a successful response; this does not prove physical actuation.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">rejected</span></code></p></td>
+<td><p>Invalid value, permissions, object, or command; no request issued for it.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">failed</span></code></p></td>
+<td><p>A device exception response or local operation failure.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">not_attempted</span></code></p></td>
+<td><p>Skipped because validation failed elsewhere, expiry, shutdown, or no transport.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">unknown</span></code></p></td>
+<td><p>Transport failed while the write was in progress; it may have reached the device.</p></td>
+</tr>
+</tbody>
+</table>
+<p>After <code class="docutils literal notranslate"><span class="pre">unknown</span></code>, inspect device state before deciding whether another write
+is appropriate. There is no guarantee of exactly-once actuation.</p>
+</section>
+<section id="versioned-command-protocol">
+<h2>Versioned command protocol<a class="headerlink" href="#versioned-command-protocol" title="Link to this heading"></a></h2>
+<p>Default topic: <code class="docutils literal notranslate"><span class="pre">modpoll/&lt;device&gt;/commands</span></code>. Customize with
+<code class="docutils literal notranslate"><span class="pre">--mqtt-command-topic-pattern</span></code> (one complete <code class="docutils literal notranslate"><span class="pre">+</span></code> segment). The legacy
+<code class="docutils literal notranslate"><span class="pre">/set</span></code> and <code class="docutils literal notranslate"><span class="pre">/get</span></code> maps remain supported.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;version&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;request_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;set-0001&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;operation&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;set&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;values&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;setpoint&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">21.5</span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;expires_at&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2000000000</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>GET uses <code class="docutils literal notranslate"><span class="pre">&quot;operation&quot;:</span> <span class="pre">&quot;get&quot;,</span> <span class="pre">&quot;references&quot;:</span> <span class="pre">[&quot;setpoint&quot;]</span></code>. Each envelope
+requires version 1 and a request ID of 1..128 characters. <code class="docutils literal notranslate"><span class="pre">expires_at</span></code> is an
+optional finite UTC Unix timestamp, defaulting to now + <code class="docutils literal notranslate"><span class="pre">--mqtt-command-ttl</span></code>.
+Expired requests are rejected, and SET checks expiry again before each
+reference after connecting. Unknown envelope fields, duplicate JSON keys,
+malformed UTF-8, unsupported values, and NaN/Infinity are rejected.</p>
+<p>Responses go to the original request topic plus <code class="docutils literal notranslate"><span class="pre">/response</span></code> and always have
+<code class="docutils literal notranslate"><span class="pre">retain=false</span></code>. Versioned responses include version, request ID, operation,
+<code class="docutils literal notranslate"><span class="pre">deduplication_scope:</span> <span class="pre">process</span></code> and <code class="docutils literal notranslate"><span class="pre">results</span></code> by reference. Legacy GET keeps
+its map response, omitting unreadable references. Legacy SET returns <code class="docutils literal notranslate"><span class="pre">results</span></code>.</p>
+<p>An identical request ID and byte-identical payload returns its cached result.
+A different payload with that ID is rejected. The cache holds at most 1000
+results and 8 MiB; entries expire after
+<code class="docutils literal notranslate"><span class="pre">max(300,</span> <span class="pre">--mqtt-command-ttl)</span></code> seconds unless evicted earlier for capacity.
+Restarting the process clears the cache. A cached result describes the original
+execution and does not assert the current value. Publisher formatting must be
+stable if it retries a request.</p>
+<p>All commands delivered with the retained flag are discarded. MQTT 5 subscriptions
+use Retain As Published to detect retained live publications as well as replay.
+MQTT 3.1.1 does not expose a publisher’s retain flag on live delivery; broker ACLs
+and publishers must prohibit retained command publication for that case.
+Queue admission is distinct from
+MQTT delivery acknowledgement: the broker’s PUBACK does not mean execution.
+Small versioned requests rejected for retention, queue saturation, or queue
+expiry receive a best-effort rejection response. Oversized/malformed requests
+and rejections beyond the bounded rejection queue can be dropped with counters.
+Command responses themselves can be lost during a broker outage.</p>
+</section>
+<section id="resources-scheduling-and-recovery">
+<h2>Resources, scheduling, and recovery<a class="headerlink" href="#resources-scheduling-and-recovery" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">--mqtt-max-payload-bytes</span></code> (65536) bounds one command;
+<code class="docutils literal notranslate"><span class="pre">--mqtt-rx-queue-size</span></code> (1000) bounds queued commands and
+<code class="docutils literal notranslate"><span class="pre">--mqtt-queue-bytes</span></code> (1048576) bounds their total payload size.
+A separate bounded rejection queue stores only payloads up to 2048 bytes.
+<code class="docutils literal notranslate"><span class="pre">--mqtt-command-ttl</span></code> (30 seconds) also bounds residence in the incoming queue.
+<code class="docutils literal notranslate"><span class="pre">--mqtt-tx-queue-size</span></code> (1000) bounds outgoing pending publications. Diagnostics
+expose dropped/expired messages and publish/subscription errors. These limits
+are process memory limits, not durable storage or an offline telemetry backlog.</p>
+<p>One owner loop performs all Modbus I/O. MQTT callbacks enqueue commands only;
+Paho owns asynchronous broker connection/reconnection. Publication while
+disconnected fails quickly and increments a counter. Polling continues during
+broker outages. Poll deadlines, queue age, reconnect backoff, and recovery use
+monotonic time; acquired values and command absolute expiry use UTC time.
+An overrun schedules the next period from the end of the delayed cycle, avoiding
+a burst of catch-up polls. <code class="docutils literal notranslate"><span class="pre">--timeout</span></code> bounds each Modbus request; no internal
+pymodbus retries multiply write attempts. Shutdown remains subject to an active
+transport operation and the network library’s connection timeout.</p>
+<p><code class="docutils literal notranslate"><span class="pre">--autoremove</span></code> counts only actual poll failures and disables a block after
+three consecutive failures. It remains permanent by default. Add
+<code class="docutils literal notranslate"><span class="pre">--poller-recover-after</span> <span class="pre">60</span></code> to probe disabled blocks after 60 seconds. A failed
+probe counts as the next attempt; three failed probes can disable the block again.
+A connection backoff does not increment unattempted block/device counters.</p>
+<p>At every poll cycle, current values are invalidated before reading. A failed
+reference cannot retain a stale current value. Valid siblings still publish.
+Diagnostics include <code class="docutils literal notranslate"><span class="pre">quality</span></code> (<code class="docutils literal notranslate"><span class="pre">good</span></code>, <code class="docutils literal notranslate"><span class="pre">partial</span></code>, <code class="docutils literal notranslate"><span class="pre">unavailable</span></code>),
+<code class="docutils literal notranslate"><span class="pre">last_success_at</span></code> and <code class="docutils literal notranslate"><span class="pre">last_attempt_at</span></code> per reference; historical successful
+values/times are preserved internally. Partial group padding is a compatibility
+value, not an acquired false value for the missing bits. <code class="docutils literal notranslate"><span class="pre">last_poll_success</span></code>
+means some values are available; poll errors and per-reference quality reveal
+partial failure. Retained telemetry at the broker may still be historical:
+consumers must use freshness diagnostics, not process presence alone.</p>
+<p><code class="docutils literal notranslate"><span class="pre">--export</span></code> writes all devices from all files to one JSON snapshot, using a
+temporary file beside the destination, flush/fsync and atomic replacement.
+Unavailable references are null. <code class="docutils literal notranslate"><span class="pre">--timestamp</span></code> records the cycle timestamp
+inside each device object. It is not a per-reference acquisition timestamp.
+There is no promise of directory-fsync durability after a power loss. A failed
+export is logged and polling continues; with <code class="docutils literal notranslate"><span class="pre">--once</span></code> it causes exit status 1.</p>
+</section>
+<section id="mqtt-deployment-and-lifecycle">
+<h2>MQTT deployment and lifecycle<a class="headerlink" href="#mqtt-deployment-and-lifecycle" title="Link to this heading"></a></h2>
+<p>Use <code class="docutils literal notranslate"><span class="pre">--mqtt-namespace</span> <span class="pre">site/gateway1</span></code> for an isolated prefix on all default
+patterns plus presence/global diagnostics. Explicit patterns outside the
+<code class="docutils literal notranslate"><span class="pre">modpoll/</span></code> prefix keep their chosen values. Multiple processes should use
+separate namespaces and client IDs. Grant MQTT ACLs only for the required data,
+command, response and diagnostic topics; retained commands are prohibited.</p>
+<p>Sessions are ephemeral by default at every QoS. Set an explicit
+<code class="docutils literal notranslate"><span class="pre">--mqtt-clientid</span></code> and <code class="docutils literal notranslate"><span class="pre">--mqtt-session-expiry</span> <span class="pre">N</span></code> to request persistence.
+MQTT 5 uses N as Session Expiry Interval; MQTT 3.1.1 uses clean_session=false
+(the broker controls expiry). <code class="docutils literal notranslate"><span class="pre">--mqtt-use-tls</span></code> uses default trusted roots or
+<code class="docutils literal notranslate"><span class="pre">--mqtt-cacerts</span></code> and TLS 1.2 minimum. TLS 1.0/1.1 are rejected.
+<code class="docutils literal notranslate"><span class="pre">--mqtt-insecure</span></code> disables certificate/hostname verification explicitly.
+<code class="docutils literal notranslate"><span class="pre">--mqtt-pass-file</span></code> reads a UTF-8 password file; it is exclusive with
+<code class="docutils literal notranslate"><span class="pre">--mqtt-pass</span></code>. Restrict the file permissions and avoid credentials in command
+arguments or configuration URLs. URL credentials/query strings are removed
+from source diagnostics.</p>
+<p>Presence is retained and republishes <code class="docutils literal notranslate"><span class="pre">online=true</span></code> on every broker reconnect.
+Clean shutdown sends <code class="docutils literal notranslate"><span class="pre">online=false</span></code>, flushes pending publications for up to
+<code class="docutils literal notranslate"><span class="pre">--mqtt-shutdown-timeout</span></code> (3 seconds), and disconnects. SIGINT/SIGTERM interrupt
+waiting and restore signal handlers after cleanup. <code class="docutils literal notranslate"><span class="pre">--once</span></code> subscribes to no
+commands, polls one cycle and waits for accepted MQTT publications. Exit codes
+are 0 for success, 1 for runtime/poll/publication failure, and 2 for invalid
+configuration/options. Daemon mode tolerates temporary outages while exposing
+them through logs and diagnostics.</p>
+</section>
+<section id="validation-and-remaining-field-work">
+<h2>Validation and remaining field work<a class="headerlink" href="#validation-and-remaining-field-work" title="Link to this heading"></a></h2>
+<p>Regression tests cover the audit defects (poller binding and parser state,
+numeric overflow, UTF-8 isolation, endian bit writes, stale decodes, retained
+commands, backoff, widths/groups, atomic export, attempted failure counters,
+reconnect presence, strict configuration/timing, and once exit codes).
+<code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">ci</span></code> runs quality/type/unit gates. <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">test-integration</span></code> uses a local
+Mosquitto broker and a Modbus simulator with independent slaves and object
+spaces; MQTT 5 and 3.1.1 are exercised by the real CLI. Set
+<code class="docutils literal notranslate"><span class="pre">MODPOLL_REQUIRE_INTEGRATION=1</span></code> to fail instead of skipping absent prerequisites.
+CI tests pymodbus 3.10.0 and the latest compatible release, installs built wheels
+outside the source checkout (including the serial extra), and gates PR/release
+docs builds with warnings as errors.</p>
+<p>Before deploying to physical equipment, verify serial/UDP timing, actual FC22
+support, endian maps against vendor examples, competing-master behavior,
+certificate/authentication failure, and a multi-day outage/recovery run. Local
+simulators cannot establish those hardware-specific guarantees.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="configure.html" class="btn btn-neutral float-left" title="Configuration" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="changelog.html" class="btn btn-neutral float-right" title="Changelog" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021-2026 Ying Shaodong; 2026 yoch.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

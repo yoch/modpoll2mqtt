@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Quickstart &mdash; modpoll2mqtt 2.2.1 documentation</title>
+  <title>Quickstart &mdash; modpoll2mqtt 2.3.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=16656018"></script>
+      <script src="_static/documentation_options.js?v=c3c8ae58"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -49,10 +49,12 @@
 <li class="toctree-l2"><a class="reference internal" href="#poll-once">Poll once</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#publish-to-mqtt">Publish to MQTT</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#write-by-reference">Write by reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#validate-before-running">Validate before running</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Basic Usage</a></li>
 <li class="toctree-l1"><a class="reference internal" href="configure.html">Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="consolidation.html">Operation and migration from 2.2.1</a></li>
 <li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a></li>
 </ul>
 
@@ -106,6 +108,15 @@
 </pre></div>
 </div>
 <p>See <a class="reference internal" href="usage.html"><span class="doc">Basic Usage</span></a> for MQTT topics, write constraints (including <code class="docutils literal notranslate"><span class="pre">bool8</span></code> array values), and read-only object types.</p>
+</section>
+<section id="validate-before-running">
+<h2>Validate before running<a class="headerlink" href="#validate-before-running" title="Link to this heading"></a></h2>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>modpoll<span class="w"> </span>--check-config<span class="w"> </span>--config<span class="w"> </span>examples/modsim.csv
+</pre></div>
+</div>
+<p>For separate gateways sharing a broker, give each process its own
+<code class="docutils literal notranslate"><span class="pre">--mqtt-namespace</span></code> and, if persistent sessions are needed, <code class="docutils literal notranslate"><span class="pre">--mqtt-clientid</span></code>.
+Use <a class="reference internal" href="consolidation.html"><span class="doc">Operation and migration from 2.2.1</span></a> to configure bounded queues and safe command handling.</p>
 </section>
 </section>
 

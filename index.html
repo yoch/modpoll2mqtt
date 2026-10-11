@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Welcome to modpoll2mqtt’s documentation! &mdash; modpoll2mqtt 2.2.1 documentation</title>
+  <title>Welcome to modpoll2mqtt’s documentation! &mdash; modpoll2mqtt 2.3.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=16656018"></script>
+      <script src="_static/documentation_options.js?v=c3c8ae58"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -47,6 +47,7 @@
 <li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Basic Usage</a></li>
 <li class="toctree-l1"><a class="reference internal" href="configure.html">Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="consolidation.html">Operation and migration from 2.2.1</a></li>
 <li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a></li>
 </ul>
 
@@ -90,6 +91,7 @@
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#poll-once">Poll once</a></li>
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#publish-to-mqtt">Publish to MQTT</a></li>
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#write-by-reference">Write by reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#validate-before-running">Validate before running</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Basic Usage</a><ul>
@@ -109,6 +111,7 @@
 <li class="toctree-l2"><a class="reference internal" href="usage.html#publish-behavior">Publish behavior</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage.html#mqtt-write-commands">MQTT write commands</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage.html#mqtt-on-demand-read-get">MQTT on-demand read (get)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#consolidation-and-migration">Consolidation and migration</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="configure.html">Configuration</a><ul>
@@ -117,8 +120,17 @@
 <li class="toctree-l2"><a class="reference internal" href="configure.html#example-2-scpm-s6-power-meter-modbus-rtu-device">Example 2: SCPM-S6 Power Meter (Modbus RTU device)</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="consolidation.html">Operation and migration from 2.2.1</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="consolidation.html#configuration-and-codecs">Configuration and codecs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="consolidation.html#writes-and-acknowledgements">Writes and acknowledgements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="consolidation.html#versioned-command-protocol">Versioned command protocol</a></li>
+<li class="toctree-l2"><a class="reference internal" href="consolidation.html#resources-scheduling-and-recovery">Resources, scheduling, and recovery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="consolidation.html#mqtt-deployment-and-lifecycle">MQTT deployment and lifecycle</a></li>
+<li class="toctree-l2"><a class="reference internal" href="consolidation.html#validation-and-remaining-field-work">Validation and remaining field work</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#id1">2.2.1 (2026-06-16)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#id1">2.3.0 (2026-10-11)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="changelog.html#section-1">2.2.0 (2026-06-16)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="changelog.html#section-2">2.1.2 (2026-06-15)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="changelog.html#section-3">2.1.1 (2026-06-11)</a></li>

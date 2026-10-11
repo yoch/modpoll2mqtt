@@ -6,20 +6,20 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Changelog &mdash; modpoll2mqtt 2.2.1 documentation</title>
+  <title>Changelog &mdash; modpoll2mqtt 2.3.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=16656018"></script>
+      <script src="_static/documentation_options.js?v=c3c8ae58"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="prev" title="Configuration" href="configure.html" /> 
+    <link rel="prev" title="Operation and migration from 2.2.1" href="consolidation.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -47,41 +47,46 @@
 <li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Basic Usage</a></li>
 <li class="toctree-l1"><a class="reference internal" href="configure.html">Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="consolidation.html">Operation and migration from 2.2.1</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Changelog</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#id1">2.2.1 (2026-06-16)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#id1">2.3.0 (2026-10-11)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#features">Features</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fixes">Fixes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#breaking-changes">BREAKING CHANGES</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#tests-and-ci">Tests and CI</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#internal">Internal</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#documentation">Documentation</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#tests">Tests</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#section-1">2.2.0 (2026-06-16)</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#features">Features</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#breaking-changes">BREAKING CHANGES</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#features-1">Features</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#breaking-changes-1">BREAKING CHANGES</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#documentation-1">Documentation</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#tests-1">Tests</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#section-2">2.1.2 (2026-06-15)</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#features-1">Features</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#features-2">Features</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#documentation-2">Documentation</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#tests-2">Tests</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#section-3">2.1.1 (2026-06-11)</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#features-2">Features</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#features-3">Features</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#documentation-3">Documentation</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#internal-1">Internal</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#section-4">2.1.0 (2026-06-10)</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#features-3">Features</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#breaking-changes-1">BREAKING CHANGES</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#features-4">Features</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#breaking-changes-2">BREAKING CHANGES</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#section-5">2.0.0 (2026-06-10)</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#project">Project</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#features-4">Features</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#breaking-changes-2">BREAKING CHANGES</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#features-5">Features</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#breaking-changes-3">BREAKING CHANGES</a></li>
 </ul>
 </li>
 </ul>
@@ -115,7 +120,95 @@
   <section id="changelog">
 <h1>Changelog<a class="headerlink" href="#changelog" title="Link to this heading"></a></h1>
 <section id="id1">
-<h2><a class="reference external" href="https://github.com/yoch/modpoll2mqtt/compare/v2.2.0...v2.2.1">2.2.1</a> (2026-06-16)<a class="headerlink" href="#id1" title="Link to this heading"></a></h2>
+<h2><a class="reference external" href="https://github.com/yoch/modpoll2mqtt/compare/v2.2.1...v2.3.0">2.3.0</a> (2026-10-11)<a class="headerlink" href="#id1" title="Link to this heading"></a></h2>
+<section id="features">
+<h3>Features<a class="headerlink" href="#features" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>add <code class="docutils literal notranslate"><span class="pre">--check-config</span></code> for whole-configuration validation without
+opening Modbus/MQTT transports</p></li>
+<li><p>add <code class="docutils literal notranslate"><span class="pre">--read-only</span></code> to reject all MQTT writes and
+<code class="docutils literal notranslate"><span class="pre">--modbus-bit-write</span> <span class="pre">mask</span></code> for optional atomic FC22 register updates</p></li>
+<li><p>add <code class="docutils literal notranslate"><span class="pre">--poller-recover-after</span></code> for optional re-probing after
+<code class="docutils literal notranslate"><span class="pre">--autoremove</span></code> disables a poller</p></li>
+<li><p>add <code class="docutils literal notranslate"><span class="pre">--mqtt-namespace</span></code> and <code class="docutils literal notranslate"><span class="pre">--mqtt-command-topic-pattern</span></code> for
+isolated gateway topics and versioned get/set commands with
+per-reference results and bounded process-local request deduplication</p></li>
+<li><p>add <code class="docutils literal notranslate"><span class="pre">--mqtt-max-payload-bytes</span></code>, <code class="docutils literal notranslate"><span class="pre">--mqtt-queue-bytes</span></code>,
+<code class="docutils literal notranslate"><span class="pre">--mqtt-tx-queue-size</span></code>, and <code class="docutils literal notranslate"><span class="pre">--mqtt-command-ttl</span></code> to bound command
+resources and age</p></li>
+<li><p>add <code class="docutils literal notranslate"><span class="pre">--mqtt-shutdown-timeout</span></code>, <code class="docutils literal notranslate"><span class="pre">--mqtt-session-expiry</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">--mqtt-pass-file</span></code> for publication flushing, explicit persistent
+sessions, and file-based credentials</p></li>
+<li><p>expose per-reference quality/acquisition times and MQTT
+rejection/publication/subscription counters in diagnostics</p></li>
+</ul>
+</section>
+<section id="fixes">
+<h3>Fixes<a class="headerlink" href="#fixes" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>bind references to their declared function code/endian instead of the
+first overlapping range; retain distinct aliases when identical
+pollers are reused</p></li>
+<li><p>reject unsafe numeric writes before bus I/O; make register bit writes
+inverse to decoding; target only the declared coil group</p></li>
+<li><p>clear failed/short/non-finite decodes without retaining a stale
+current value; isolate a malformed UTF-8 string from other references</p></li>
+<li><p>saturate reconnect backoff, schedule with monotonic time, avoid
+counting unattempted polls, disable pymodbus write retries, and
+guarantee transport cleanup</p></li>
+<li><p>ignore retained commands (MQTT 5 preserves retain on live delivery),
+reject malformed/duplicate-key JSON, bound incoming/outgoing queues,
+reconnect MQTT asynchronously, and republish retained presence after
+reconnect</p></li>
+<li><p>aggregate all configurations into one atomic JSON export and report
+partial writes/uncertain acknowledgements without blind replay</p></li>
+<li><p>repair shipped SDM120M permissions, SmartLogger dtype, and TriStar
+duplicate names (second occurrences use their address suffix)</p></li>
+<li><p>require pyserial so the package still imports with pymodbus 3.16.0,
+which fails without it
+(<a class="reference external" href="https://github.com/pymodbus-dev/pymodbus/issues/3042">pymodbus#3042</a>);
+the <code class="docutils literal notranslate"><span class="pre">serial</span></code> extra is kept for compatibility</p></li>
+</ul>
+</section>
+<section id="breaking-changes">
+<h3>BREAKING CHANGES<a class="headerlink" href="#breaking-changes" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>invalid CSV entries previously skipped now abort startup (exit 2);
+device names must be unique across files, scales finite/nonzero,
+IDs/ranges/dtypes/permissions valid</p></li>
+<li><p>unsigned overflow no longer wraps; out-of-range, non-finite,
+fractional unscaled integer writes and oversized UTF-8 strings are
+rejected; scaled integer writes round the scaled raw value</p></li>
+<li><p>TLS 1.0/1.1 are rejected; sessions are ephemeral by default at every
+QoS; explicit persistent sessions require <code class="docutils literal notranslate"><span class="pre">--mqtt-clientid</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--once</span></code> runs polling only and returns 1 on poll/runtime/MQTT
+publication failure; command responses are never retained, even with
+<code class="docutils literal notranslate"><span class="pre">--mqtt-retain</span></code></p></li>
+<li><p>legacy SET now returns per-reference results on
+<code class="docutils literal notranslate"><span class="pre">&lt;request-topic&gt;/response</span></code>; all known writes are validated before
+any are attempted, and conflicting ranges in a single command are
+rejected</p></li>
+<li><p>shipped <code class="docutils literal notranslate"><span class="pre">contrib/</span></code> configurations changed: TriStar duplicate names
+are renamed (their MQTT topics and payload keys change), SDM120M
+permissions and the SmartLogger dtype are corrected</p></li>
+</ul>
+</section>
+<section id="tests-and-ci">
+<h3>Tests and CI<a class="headerlink" href="#tests-and-ci" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>add regression coverage for the audit defects, all supported numeric
+endians, strict commands, batch prevalidation, lost acknowledgements,
+queue budgets, recovery, atomic export, and exit codes</p></li>
+<li><p>run real CLI/Modbus/MQTT 5 and 3.1.1 exchanges with local Mosquitto
+and independent slave/object spaces; required CI integration cannot
+silently skip missing infrastructure</p></li>
+<li><p>test minimum/latest pymodbus, install built wheels outside the source
+tree with the serial extra, build docs with warnings as errors on PRs,
+and require these gates before publishing ##
+<a class="reference external" href="https://github.com/yoch/modpoll2mqtt/compare/v2.2.0...v2.2.1">2.2.1</a>
+(2026-06-16)</p></li>
+</ul>
+</section>
 <section id="internal">
 <h3>Internal<a class="headerlink" href="#internal" title="Link to this heading"></a></h3>
 <ul class="simple">
@@ -145,8 +238,8 @@ and CI quality gates</p></li>
 </section>
 <section id="section-1">
 <span id="id2"></span><h2><a class="reference external" href="https://github.com/yoch/modpoll2mqtt/compare/v2.1.2...v2.2.0">2.2.0</a> (2026-06-16)<a class="headerlink" href="#section-1" title="Link to this heading"></a></h2>
-<section id="features">
-<h3>Features<a class="headerlink" href="#features" title="Link to this heading"></a></h3>
+<section id="features-1">
+<span id="id3"></span><h3>Features<a class="headerlink" href="#features-1" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p><strong>MQTT on-demand read (get):</strong> subscribe on <code class="docutils literal notranslate"><span class="pre">modpoll/+/get</span></code>
 (<code class="docutils literal notranslate"><span class="pre">--mqtt-get-topic-pattern</span></code>); publish <code class="docutils literal notranslate"><span class="pre">{&quot;ref&quot;:</span> <span class="pre">null}</span></code> to
@@ -173,8 +266,8 @@ always retained</p></li>
 publishes)</p></li>
 </ul>
 </section>
-<section id="breaking-changes">
-<h3>BREAKING CHANGES<a class="headerlink" href="#breaking-changes" title="Link to this heading"></a></h3>
+<section id="breaking-changes-1">
+<span id="id4"></span><h3>BREAKING CHANGES<a class="headerlink" href="#breaking-changes-1" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p><strong>``–interval`` default is now transport-aware:</strong> <code class="docutils literal notranslate"><span class="pre">0.0</span></code> s for
 TCP/UDP (was <code class="docutils literal notranslate"><span class="pre">0.5</span></code> s); serial/RTU derives the RTU 3.5-character
@@ -188,14 +281,14 @@ successive refs in one <code class="docutils literal notranslate"><span class="p
 </ul>
 </section>
 <section id="documentation-1">
-<span id="id3"></span><h3>Documentation<a class="headerlink" href="#documentation-1" title="Link to this heading"></a></h3>
+<span id="id5"></span><h3>Documentation<a class="headerlink" href="#documentation-1" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>document MQTT get, persistent connection, transport-aware
 <code class="docutils literal notranslate"><span class="pre">--interval</span></code>, and extended diagnostics in <code class="docutils literal notranslate"><span class="pre">docs/usage.rst</span></code></p></li>
 </ul>
 </section>
 <section id="tests-1">
-<span id="id4"></span><h3>Tests<a class="headerlink" href="#tests-1" title="Link to this heading"></a></h3>
+<span id="id6"></span><h3>Tests<a class="headerlink" href="#tests-1" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>add <code class="docutils literal notranslate"><span class="pre">tests/test_modbus_connection.py</span></code>, extend
 <code class="docutils literal notranslate"><span class="pre">tests/test_main_get.py</span></code> for backoff, connection reuse, and
@@ -205,9 +298,9 @@ diagnostic counters</p></li>
 </section>
 </section>
 <section id="section-2">
-<span id="id5"></span><h2><a class="reference external" href="https://github.com/yoch/modpoll2mqtt/compare/v2.1.1...v2.1.2">2.1.2</a> (2026-06-15)<a class="headerlink" href="#section-2" title="Link to this heading"></a></h2>
-<section id="features-1">
-<span id="id6"></span><h3>Features<a class="headerlink" href="#features-1" title="Link to this heading"></a></h3>
+<span id="id7"></span><h2><a class="reference external" href="https://github.com/yoch/modpoll2mqtt/compare/v2.1.1...v2.1.2">2.1.2</a> (2026-06-15)<a class="headerlink" href="#section-2" title="Link to this heading"></a></h2>
+<section id="features-2">
+<span id="id8"></span><h3>Features<a class="headerlink" href="#features-2" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>warn at config load when a reference is marked <code class="docutils literal notranslate"><span class="pre">w</span></code>/<code class="docutils literal notranslate"><span class="pre">rw</span></code> on a
 <code class="docutils literal notranslate"><span class="pre">discrete_input</span></code> or <code class="docutils literal notranslate"><span class="pre">input_register</span></code> poller (Modbus inputs are
@@ -215,7 +308,7 @@ read-only)</p></li>
 </ul>
 </section>
 <section id="documentation-2">
-<span id="id7"></span><h3>Documentation<a class="headerlink" href="#documentation-2" title="Link to this heading"></a></h3>
+<span id="id9"></span><h3>Documentation<a class="headerlink" href="#documentation-2" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>fix README MQTT write example for <code class="docutils literal notranslate"><span class="pre">bool8</span></code> references (array of 8
 booleans, not a scalar)</p></li>
@@ -227,7 +320,7 @@ and validation rules</p></li>
 </ul>
 </section>
 <section id="tests-2">
-<span id="id8"></span><h3>Tests<a class="headerlink" href="#tests-2" title="Link to this heading"></a></h3>
+<span id="id10"></span><h3>Tests<a class="headerlink" href="#tests-2" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>add contract tests in <code class="docutils literal notranslate"><span class="pre">tests/test_handler_behavior.py</span></code> for
 documented edge cases</p></li>
@@ -237,16 +330,16 @@ documented edge cases</p></li>
 </section>
 </section>
 <section id="section-3">
-<span id="id9"></span><h2><a class="reference external" href="https://github.com/yoch/modpoll2mqtt/compare/v2.1.0...v2.1.1">2.1.1</a> (2026-06-11)<a class="headerlink" href="#section-3" title="Link to this heading"></a></h2>
-<section id="features-2">
-<span id="id10"></span><h3>Features<a class="headerlink" href="#features-2" title="Link to this heading"></a></h3>
+<span id="id11"></span><h2><a class="reference external" href="https://github.com/yoch/modpoll2mqtt/compare/v2.1.0...v2.1.1">2.1.1</a> (2026-06-11)<a class="headerlink" href="#section-3" title="Link to this heading"></a></h2>
+<section id="features-3">
+<span id="id12"></span><h3>Features<a class="headerlink" href="#features-3" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>add <code class="docutils literal notranslate"><span class="pre">--mqtt-retain</span></code> to set the MQTT retain flag on data publishes
 (diagnostics topics are never retained)</p></li>
 </ul>
 </section>
 <section id="documentation-3">
-<span id="id11"></span><h3>Documentation<a class="headerlink" href="#documentation-3" title="Link to this heading"></a></h3>
+<span id="id13"></span><h3>Documentation<a class="headerlink" href="#documentation-3" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>add release documentation checklist for agents and maintainers in
 CONTRIBUTING.md</p></li>
@@ -255,7 +348,7 @@ CONTRIBUTING.md</p></li>
 </ul>
 </section>
 <section id="internal-1">
-<span id="id12"></span><h3>Internal<a class="headerlink" href="#internal-1" title="Link to this heading"></a></h3>
+<span id="id14"></span><h3>Internal<a class="headerlink" href="#internal-1" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>centralize MQTT data publish policy (QoS and retain) in
 <code class="docutils literal notranslate"><span class="pre">MqttHandler.publish_data_message</span></code></p></li>
@@ -263,9 +356,9 @@ CONTRIBUTING.md</p></li>
 </section>
 </section>
 <section id="section-4">
-<span id="id13"></span><h2><a class="reference external" href="https://github.com/yoch/modpoll2mqtt/compare/v2.0.0...v2.1.0">2.1.0</a> (2026-06-10)<a class="headerlink" href="#section-4" title="Link to this heading"></a></h2>
-<section id="features-3">
-<span id="id14"></span><h3>Features<a class="headerlink" href="#features-3" title="Link to this heading"></a></h3>
+<span id="id15"></span><h2><a class="reference external" href="https://github.com/yoch/modpoll2mqtt/compare/v2.0.0...v2.1.0">2.1.0</a> (2026-06-10)<a class="headerlink" href="#section-4" title="Link to this heading"></a></h2>
+<section id="features-4">
+<span id="id16"></span><h3>Features<a class="headerlink" href="#features-4" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>add <code class="docutils literal notranslate"><span class="pre">--mqtt-keys</span> <span class="pre">name-only</span></code> to publish MQTT JSON keys without the
 unit suffix (default key style remains <code class="docutils literal notranslate"><span class="pre">name-with-unit</span></code>)</p></li>
@@ -274,8 +367,8 @@ unit suffix (default key style remains <code class="docutils literal notranslate
 skipped with a warning</p></li>
 </ul>
 </section>
-<section id="breaking-changes-1">
-<span id="id15"></span><h3>BREAKING CHANGES<a class="headerlink" href="#breaking-changes-1" title="Link to this heading"></a></h3>
+<section id="breaking-changes-2">
+<span id="id17"></span><h3>BREAKING CHANGES<a class="headerlink" href="#breaking-changes-2" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>renamed <code class="docutils literal notranslate"><span class="pre">--daemon</span></code> / <code class="docutils literal notranslate"><span class="pre">-d</span></code> to <code class="docutils literal notranslate"><span class="pre">--no-output</span></code> (suppresses poll
 result tables only; does not fork)</p></li>
@@ -285,7 +378,7 @@ result tables only; does not fork)</p></li>
 </section>
 </section>
 <section id="section-5">
-<span id="id16"></span><h2><a class="reference external" href="https://github.com/yoch/modpoll2mqtt/compare/v1.6.0...v2.0.0">2.0.0</a> (2026-06-10)<a class="headerlink" href="#section-5" title="Link to this heading"></a></h2>
+<span id="id18"></span><h2><a class="reference external" href="https://github.com/yoch/modpoll2mqtt/compare/v1.6.0...v2.0.0">2.0.0</a> (2026-06-10)<a class="headerlink" href="#section-5" title="Link to this heading"></a></h2>
 <section id="project">
 <h3>Project<a class="headerlink" href="#project" title="Link to this heading"></a></h3>
 <ul class="simple">
@@ -294,8 +387,8 @@ package renamed to <code class="docutils literal notranslate"><span class="pre">
 <li><p>CLI command and Python module remain <code class="docutils literal notranslate"><span class="pre">modpoll</span></code></p></li>
 </ul>
 </section>
-<section id="features-4">
-<span id="id17"></span><h3>Features<a class="headerlink" href="#features-4" title="Link to this heading"></a></h3>
+<section id="features-5">
+<span id="id19"></span><h3>Features<a class="headerlink" href="#features-5" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>semantic MQTT write by CSV reference on <code class="docutils literal notranslate"><span class="pre">modpoll/{device}/set</span></code> with
 payload <code class="docutils literal notranslate"><span class="pre">ref</span></code> and <code class="docutils literal notranslate"><span class="pre">value</span></code> (device from topic; scale, dtype, and
@@ -303,8 +396,8 @@ endianness handled automatically)</p></li>
 <li><p>subscribe pattern <code class="docutils literal notranslate"><span class="pre">modpoll/+/set</span></code> by default</p></li>
 </ul>
 </section>
-<section id="breaking-changes-2">
-<span id="id18"></span><h3>BREAKING CHANGES<a class="headerlink" href="#breaking-changes-2" title="Link to this heading"></a></h3>
+<section id="breaking-changes-3">
+<span id="id20"></span><h3>BREAKING CHANGES<a class="headerlink" href="#breaking-changes-3" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>removed low-level MQTT write format (<code class="docutils literal notranslate"><span class="pre">object_type</span></code>, <code class="docutils literal notranslate"><span class="pre">address</span></code>,
 <code class="docutils literal notranslate"><span class="pre">value</span></code>); use topic + <code class="docutils literal notranslate"><span class="pre">ref</span></code> and <code class="docutils literal notranslate"><span class="pre">value</span></code> instead</p></li>
@@ -319,7 +412,7 @@ endianness handled automatically)</p></li>
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="configure.html" class="btn btn-neutral float-left" title="Configuration" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="consolidation.html" class="btn btn-neutral float-left" title="Operation and migration from 2.2.1" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
     </div>
 
   <hr/>
