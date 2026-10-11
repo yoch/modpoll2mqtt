@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Bug Fixes
+
+* require pyserial so the package still imports with pymodbus 3.16.0, which fails without it ([pymodbus#3042](https://github.com/pymodbus-dev/pymodbus/issues/3042)); the `serial` extra is kept for compatibility
+
 ## [2.2.1](https://github.com/yoch/modpoll2mqtt/compare/v2.2.0...v2.2.1) (2026-06-16)
 
 ### Internal

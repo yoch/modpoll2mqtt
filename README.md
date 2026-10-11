@@ -31,11 +31,8 @@ Python 3.10+ required.
 pip install modpoll2mqtt
 ```
 
-Optional serial support (pyserial):
-
-```bash
-pip install 'modpoll2mqtt[serial]'
-```
+Serial support (pyserial) is installed by default. The `serial` extra is kept so
+existing `pip install 'modpoll2mqtt[serial]'` commands keep working.
 
 Upgrade:
 

@@ -39,6 +39,8 @@ classifiers = [
 ]
 dependencies = [
     "pymodbus>=3.10,<4.0",
+    # pymodbus 3.16.0 cannot be imported without pyserial (pymodbus-dev/pymodbus#3042).
+    "pyserial>=3.5,<4.0",
     "paho-mqtt>=2.1.0,<3.0",
     "prettytable>=3.9.0,<4.0",
     "requests>=2.32.5,<3.0",
