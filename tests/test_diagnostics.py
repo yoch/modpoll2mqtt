@@ -30,6 +30,10 @@ def test_count_devices_failing_across_handlers():
 
 def test_publish_global_diagnostics():
     mqtt = MagicMock()
+    mqtt.status_topic = "modpoll/status"
+    mqtt.dropped_messages = mqtt.expired_messages = mqtt.publish_errors = (
+        mqtt.subscription_errors
+    ) = 0
     mqtt.is_connected.return_value = True
     mqtt.retain_data_publishes = False
     handlers = [_handler_with_devices(False, True)]
@@ -44,12 +48,20 @@ def test_publish_global_diagnostics():
         "modbus_ok": True,
         "devices_failing": 1,
         "last_cycle_s": 9.8,
+        "mqtt_dropped_messages": 0,
+        "mqtt_expired_messages": 0,
+        "mqtt_publish_errors": 0,
+        "mqtt_subscription_errors": 0,
     }
     assert mqtt.publish.call_args.kwargs["retain"] is False
 
 
 def test_publish_global_diagnostics_when_disconnected():
     mqtt = MagicMock()
+    mqtt.status_topic = "modpoll/status"
+    mqtt.dropped_messages = mqtt.expired_messages = mqtt.publish_errors = (
+        mqtt.subscription_errors
+    ) = 0
     mqtt.is_connected.return_value = False
     mqtt.retain_data_publishes = False
     handlers = [_handler_with_devices()]
@@ -61,6 +73,10 @@ def test_publish_global_diagnostics_when_disconnected():
 
 def test_publish_global_diagnostics_respects_mqtt_retain():
     mqtt = MagicMock()
+    mqtt.status_topic = "modpoll/status"
+    mqtt.dropped_messages = mqtt.expired_messages = mqtt.publish_errors = (
+        mqtt.subscription_errors
+    ) = 0
     mqtt.is_connected.return_value = True
     mqtt.retain_data_publishes = True
     handlers = [_handler_with_devices()]

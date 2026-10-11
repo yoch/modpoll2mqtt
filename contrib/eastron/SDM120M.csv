@@ -51,7 +51,7 @@ ref,demand_time,0,float32,r,Seconds
 ref,demand_period,2,float32,r,Seconds
 
 poll,holding_register,12,2,BE_BE,
-ref,relay_pulse_width,12,float32,rm,Millisecs
+ref,relay_pulse_width,12,float32,r,Millisecs
 
 poll,holding_register,18,4,BE_BE,
 ref,network_parity_stop,18,float32,r

@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+import struct
 from typing import Protocol
 
 from .modbus_models import Device, Poller, Reference
 from .reference_common import call_with_device_id, find_poller_for_ref
 from .types import ModbusClient, ModbusValue
+from .utils import get_utc_time
 
 
 class _ReadHandler(Protocol):
@@ -39,6 +41,10 @@ def read_references(
             )
             unknown_skips += 1
             continue
+        if "r" not in ref.rw:
+            handler.logger.warning("Reference %s is not readable", ref_name)
+            read_failures += 1
+            continue
         poller = find_poller_for_ref(dev, ref)
         if poller is None:
             handler.logger.error(
@@ -52,26 +58,39 @@ def read_references(
             )
             read_failures += 1
             continue
+        ref.invalidate()
         resolved.append((ref_name, ref, poller))
 
     coil_refs = [(n, r, p) for n, r, p in resolved if p.fc in (1, 2)]
     batches = _group_register_batches(resolved)
 
     for ref_name, ref, poller in coil_refs:
+        ref.last_attempt_at = get_utc_time()
         try:
             value = _read_coil_reference(handler, dev, ref, poller)
             if value is None:
+                ref.update_value(None)
                 read_failures += 1
                 continue
             ref.update_value(value)
+            if (
+                ref.dtype in ("bool8", "bool16")
+                and (ref.address - poller.start_address) * 8
+                + (8 if ref.dtype == "bool8" else 16)
+                > poller.size
+            ):
+                ref.quality = "partial"
             values[ref_name] = ref.val
-        except (ValueError, IndexError) as e:
+        except (ValueError, IndexError, struct.error, OverflowError) as e:
             handler.logger.error(
                 f"Modbus read error for reference '{ref_name}' on device {dev.name}: {e}"
             )
+            ref.update_value(None)
             read_failures += 1
 
     for batch in batches:
+        for ref in batch.ref_by_name.values():
+            ref.last_attempt_at = get_utc_time()
         batch_values, batch_failures = _read_register_batch(handler, dev, batch)
         read_failures += batch_failures
         if batch_values is None:
@@ -79,7 +98,10 @@ def read_references(
         for ref_name, value in batch_values.items():
             ref = batch.ref_by_name[ref_name]
             ref.update_value(value)
-            values[ref_name] = ref.val
+            if ref.val is None:
+                read_failures += 1
+            else:
+                values[ref_name] = ref.val
 
     return values, unknown_skips, read_failures
 
@@ -153,7 +175,7 @@ def _coil_read_params(ref: Reference, poller: Poller) -> tuple[int, int]:
         width = 8 if ref.dtype == "bool8" else 16
         group_offset = ref.address - poller.start_address
         coil_start = poller.start_address + group_offset * 8
-        return coil_start, width
+        return coil_start, min(width, poller.start_address + poller.size - coil_start)
     raise ValueError(f"Unsupported coil dtype '{ref.dtype}' for reference '{ref.name}'")
 
 
@@ -224,8 +246,9 @@ def _read_coil_reference(
         bits = _read_coils(handler, dev, address, count)
     else:
         bits = _read_discrete_inputs(handler, dev, address, count)
-    if bits is None:
+    if bits is None or len(bits) < count:
         return None
+    bits = bits[:count]
     return poller.decode_coil_bits(ref, bits, address)
 
 
@@ -243,7 +266,9 @@ def _read_register_batch(
         registers = _read_input_registers(
             handler, dev, batch.read_start, batch.read_count
         )
-    if registers is None:
+    if registers is None or len(registers) < batch.read_count:
+        for ref in batch.ref_by_name.values():
+            ref.update_value(None)
         return None, len(batch.ref_by_name)
 
     out: dict[str, ModbusValue] = {}
@@ -253,9 +278,10 @@ def _read_register_batch(
             out[ref_name] = poller.decode_register_block(
                 ref, registers, batch.read_start
             )
-        except (ValueError, IndexError) as e:
+        except (ValueError, IndexError, struct.error, OverflowError) as e:
             handler.logger.error(
                 f"Failed to decode reference '{ref_name}' on device {dev.name}: {e}"
             )
+            ref.update_value(None)
             failures += 1
     return out, failures

@@ -2,6 +2,40 @@
 
 ## [Unreleased]
 
+### Features
+
+* add `--check-config` for whole-configuration validation without opening Modbus/MQTT transports
+* add `--read-only` to reject all MQTT writes and `--modbus-bit-write mask` for optional atomic FC22 register updates
+* add `--poller-recover-after` for optional re-probing after `--autoremove` disables a poller
+* add `--mqtt-namespace` and `--mqtt-command-topic-pattern` for isolated gateway topics and versioned get/set commands with per-reference results and bounded process-local request deduplication
+* add `--mqtt-max-payload-bytes`, `--mqtt-queue-bytes`, `--mqtt-tx-queue-size`, and `--mqtt-command-ttl` to bound command resources and age
+* add `--mqtt-shutdown-timeout`, `--mqtt-session-expiry`, and `--mqtt-pass-file` for publication flushing, explicit persistent sessions, and file-based credentials
+* expose per-reference quality/acquisition times and MQTT rejection/publication/subscription counters in diagnostics
+
+### Fixes
+
+* bind references to their declared function code/endian instead of the first overlapping range; retain distinct aliases when identical pollers are reused
+* reject unsafe numeric writes before bus I/O; make register bit writes inverse to decoding; target only the declared coil group
+* clear failed/short/non-finite decodes without retaining a stale current value; isolate a malformed UTF-8 string from other references
+* saturate reconnect backoff, schedule with monotonic time, avoid counting unattempted polls, disable pymodbus write retries, and guarantee transport cleanup
+* ignore retained commands, reject malformed/duplicate-key JSON, bound incoming/outgoing queues, reconnect MQTT asynchronously, and republish retained presence after reconnect
+* aggregate all configurations into one atomic JSON export and report partial writes/uncertain acknowledgements without blind replay
+* repair shipped SDM120M permissions, SmartLogger dtype, and TriStar duplicate names (second occurrences use their address suffix)
+
+### BREAKING CHANGES
+
+* invalid CSV entries previously skipped now abort startup (exit 2); device names must be unique across files, scales finite/nonzero, IDs/ranges/dtypes/permissions valid
+* unsigned overflow no longer wraps; out-of-range, non-finite, fractional unscaled integer writes and oversized UTF-8 strings are rejected; scaled integer writes round the scaled raw value
+* TLS 1.0/1.1 are rejected; sessions are ephemeral by default at every QoS; explicit persistent sessions require `--mqtt-clientid`
+* `--once` runs polling only and returns 1 on poll/runtime/MQTT publication failure; command responses are never retained, even with `--mqtt-retain`
+* legacy SET now returns per-reference results on `<request-topic>/response`; all known writes are validated before any are attempted, and conflicting ranges in a single command are rejected
+
+### Tests and CI
+
+* add regression coverage for the audit defects, all supported numeric endians, strict commands, batch prevalidation, lost acknowledgements, queue budgets, recovery, atomic export, and exit codes
+* run real CLI/Modbus/MQTT 5 and 3.1.1 exchanges with local Mosquitto and independent slave/object spaces; required CI integration cannot silently skip missing infrastructure
+* test minimum/latest pymodbus, install built wheels outside the source tree with the serial extra, build docs with warnings as errors on PRs, and require these gates before publishing
+
 ## [2.2.1](https://github.com/yoch/modpoll2mqtt/compare/v2.2.0...v2.2.1) (2026-06-16)
 
 ### Internal

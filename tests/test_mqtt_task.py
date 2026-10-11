@@ -89,6 +89,9 @@ def test_receive_returns_message_when_available():
         def get(self, block=False):
             return ("some/topic", b"payload")
 
+        def empty(self):
+            return True
+
     handler.rx_queue = FakeQueue()
 
     topic, payload = handler.receive()
@@ -283,7 +286,7 @@ def test_connect_mqtt_v311_omits_clean_session_kwarg(monkeypatch):
     }
 
 
-def test_publish_attempts_reconnect_when_disconnected_qos1(monkeypatch):
+def test_publish_does_not_block_for_reconnect(monkeypatch):
     handler = MqttHandler(
         name="test_mqtt",
         host="broker.emqx.io",
@@ -311,7 +314,7 @@ def test_publish_attempts_reconnect_when_disconnected_qos1(monkeypatch):
     result = handler.publish("topic", "msg")
 
     assert result is None
-    assert called.get("connect") is True
+    assert called.get("connect") is None
 
 
 def test_connect_returns_false_when_not_connected(monkeypatch):

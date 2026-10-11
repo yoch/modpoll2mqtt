@@ -29,12 +29,13 @@ test-integration-modbus: ## Run Modbus integration tests (auto-starts a local si
 	@poetry run pytest -m "integration and modbus"
 
 .PHONY: test-integration-mqtt
-test-integration-mqtt: ## Run MQTT integration tests (requires broker; default broker.emqx.io)
+test-integration-mqtt: ## Run MQTT integration tests (auto-starts local Mosquitto; endpoints can be overridden)
 	@echo "🚀 Running MQTT integration tests"
 	@poetry run pytest -m "integration and mqtt"
 
 .PHONY: test-integration
-test-integration: test-integration-modbus test-integration-mqtt ## Run all integration tests
+test-integration: ## Run all integration tests (local Modbus + MQTT)
+	@poetry run pytest -m integration
 
 .PHONY: typecheck
 typecheck: ## Run basedpyright on modpoll/
@@ -63,7 +64,7 @@ docs-changelog: ## Regenerate docs/changelog.rst from CHANGELOG.md
 .PHONY: docs
 docs: docs-changelog ## Build docs into html files
 	@rm -rf docs/_build
-	@poetry run sphinx-build docs/ docs/_build/html
+	@poetry run sphinx-build -W --keep-going docs/ docs/_build/html
 	@rm -rf docs/_build/html/.doctrees docs/_build/html/_sources
 
 .PHONY: docs-serve
@@ -75,3 +76,7 @@ help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 .DEFAULT_GOAL := help
+
+.PHONY: smoke-wheel
+smoke-wheel: build ## Install the wheel outside the source tree and exercise the console command
+	@poetry run python tests/smoke_wheel.py

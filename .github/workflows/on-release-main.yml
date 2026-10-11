@@ -27,8 +27,8 @@ jobs:
       - name: Set up poetry
         uses: ./.github/actions/setup-poetry
 
-      - name: Run checks
-        run: make check
+      - name: Run checks and typecheck
+        run: make check typecheck
 
   test:
     if: github.repository == 'yoch/modpoll2mqtt'
@@ -51,9 +51,27 @@ jobs:
       - name: Run unit tests
         run: make test
 
+  integration:
+    if: github.repository == 'yoch/modpoll2mqtt'
+    uses: ./.github/workflows/integration.yml
+    permissions:
+      contents: read
+
+  docs-check:
+    if: github.repository == 'yoch/modpoll2mqtt'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-poetry
+      - uses: ./.github/actions/setup-pandoc
+      - name: Build documentation with warnings as errors
+        run: make docs
+
   build-and-publish-pypi:
     if: github.repository == 'yoch/modpoll2mqtt'
-    needs: [quality-check, test]
+    needs: [quality-check, test, integration, docs-check]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -81,10 +99,8 @@ jobs:
           source .venv/bin/activate
           poetry version "${{ steps.vars.outputs.version }}"
 
-      - name: Build package
-        run: |
-          source .venv/bin/activate
-          poetry build
+      - name: Build package and validate installed wheel
+        run: make smoke-wheel
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

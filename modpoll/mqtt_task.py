@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 import logging
 import queue
-import socket
 import ssl
 import time
-from threading import Event
+import uuid
+from threading import Event, Lock
 from typing import Any
 
 from paho.mqtt import MQTTException
@@ -14,6 +14,7 @@ from paho.mqtt.client import Client as MQTTClient
 from paho.mqtt.client import MQTTMessageInfo
 from paho.mqtt.enums import CallbackAPIVersion, MQTTProtocolVersion
 
+from .commands import decode_json
 from .utils import delay_thread, on_threading_event
 
 _MQTT_CONNECT_TIMEOUT = 10.0
@@ -39,6 +40,13 @@ class MqttHandler:
         log_level: str = "INFO",
         rx_queue_size: int = 1000,
         retain_data_publishes: bool = False,
+        status_topic: str = _MQTT_STATUS_TOPIC,
+        max_payload_bytes: int = 65536,
+        queue_bytes: int = 1048576,
+        command_ttl: float = 30.0,
+        tx_queue_size: int = 1000,
+        shutdown_timeout: float = 3.0,
+        session_expiry: int = 0,
     ) -> None:
         self.name = name
         self.host = host
@@ -56,11 +64,30 @@ class MqttHandler:
         self.loglevel = log_level
 
         self.mqtt_client: MQTTClient | None = None
-        self.clean_start_or_session = qos == 0
+        self.clean_start_or_session = session_expiry == 0
+        self.session_expiry = session_expiry
+        self.status_topic = status_topic
+        self.max_payload_bytes = max_payload_bytes
+        self.queue_bytes = queue_bytes
+        self.command_ttl = command_ttl
+        self.tx_queue_size = tx_queue_size
+        self.shutdown_timeout = shutdown_timeout
+        self._rejections: queue.Queue[tuple[str, bytes, str]] = queue.Queue(
+            maxsize=rx_queue_size
+        )
+        self._queued_bytes = 0
+        self._rx_lock = Lock()
+        self.wakeup = Event()
+        self._pending: list[MQTTMessageInfo] = []
+        self._pending_lock = Lock()
+        self.dropped_messages = 0
+        self.expired_messages = 0
+        self.publish_errors = 0
+        self.subscription_errors = 0
         self.rx_queue_size = rx_queue_size
         self.retain_data_publishes = retain_data_publishes
-        self.rx_queue: queue.Queue[tuple[str, bytes]] = queue.Queue(
-            maxsize=rx_queue_size
+        self.rx_queue: queue.Queue[tuple[str, bytes] | tuple[str, bytes, float]] = (
+            queue.Queue(maxsize=rx_queue_size)
         )
         self._connected_event = Event()
         self._connect_rc: int | None = None
@@ -92,8 +119,12 @@ class MqttHandler:
             self.logger.info("Created new MQTT session.")
         for topic in self.subscribe_topics:
             self.logger.info(f"Subscribe to topic: {topic} with QoS: {self.qos}")
-            client.subscribe(topic, self.qos)
+            rc, _ = client.subscribe(topic, self.qos)
+            if rc != 0:
+                self.subscription_errors += 1
+        self.publish_status(True)
         self._connected_event.set()
+        self.wakeup.set()
 
     def _on_subscribe(
         self,
@@ -105,6 +136,7 @@ class MqttHandler:
     ) -> None:
         for rc in reason_codes:
             if rc.is_failure:
+                self.subscription_errors += 1
                 self.logger.warning(f"Failed to subscribe. Reason: {rc}")
             else:
                 self.logger.info(f"Subscribed successfully (QoS={rc.value}).")
@@ -117,19 +149,71 @@ class MqttHandler:
         reason_codes: Any,
         properties: Any,
     ) -> None:
-        self.logger.debug(f"Message (mid={mid}) published successfully.")
+        if reason_codes is not None and reason_codes.is_failure:
+            self.publish_errors += 1
+            self.logger.warning("Broker rejected publication mid=%s", mid)
+        else:
+            self.logger.debug("Message mid=%s acknowledged", mid)
 
     def _on_message(self, client: MQTTClient, userdata: Any, message: Any) -> None:
-        if message.retain == 0:
-            self.logger.info(f"Receive message ({message.topic}): {message.payload}")
-        else:
-            self.logger.info(
-                f"Receive retained message ({message.topic}): {message.payload}"
+        if self._closed or on_threading_event():
+            return
+        payload: bytes = message.payload
+        if message.retain or len(payload) > self.max_payload_bytes:
+            self.dropped_messages += 1
+            if len(payload) <= self.max_payload_bytes:
+                self._reject(message.topic, payload, "retained_command")
+            self.logger.warning(
+                "Rejected retained/oversized command on %s", message.topic
             )
+            return
+        with self._rx_lock:
+            if self._queued_bytes + len(payload) > self.queue_bytes:
+                self.dropped_messages += 1
+                self._reject(message.topic, payload, "queue_byte_budget")
+                self.logger.warning("MQTT receiving byte budget exceeded")
+                return
+            try:
+                self.rx_queue.put_nowait((message.topic, payload, time.monotonic()))
+            except queue.Full:
+                self.dropped_messages += 1
+                self._reject(message.topic, payload, "queue_full")
+                self.logger.warning(
+                    "MQTT receiving queue is full, ignoring new message"
+                )
+                return
+            self._queued_bytes += len(payload)
+            self.wakeup.set()
+
+    def _reject(self, topic: str, payload: bytes, reason: str) -> None:
+        # Callback work is bounded; decoding and responses belong to the owner loop.
+        # Keep only small rejected payloads so this queue cannot double the byte budget.
+        if len(payload) > min(self.max_payload_bytes, 2048):
+            return
         try:
-            self.rx_queue.put((message.topic, message.payload), block=False)
+            self._rejections.put_nowait((topic, payload, reason))
+            self.wakeup.set()
         except queue.Full:
-            self.logger.warning("MQTT receiving queue is full, ignoring new message.")
+            pass
+
+    def _publish_rejection(self, topic: str, payload: bytes, reason: str) -> None:
+        try:
+            obj = decode_json(payload, self.max_payload_bytes)
+            identifier = obj.get("request_id")
+            if obj.get("version") == 1 and isinstance(identifier, str):
+                self.publish_response(
+                    topic + "/response",
+                    json.dumps(
+                        {
+                            "version": 1,
+                            "request_id": identifier,
+                            "status": "rejected",
+                            "error": reason,
+                        }
+                    ),
+                )
+        except ValueError:
+            pass
 
     def _on_disconnect(
         self,
@@ -158,30 +242,16 @@ class MqttHandler:
         if self.mqtt_client is None:
             return False
         try:
-            tls_versions = {
-                "tlsv1.2": getattr(ssl, "PROTOCOL_TLSv1_2", None),
-                "tlsv1.1": getattr(ssl, "PROTOCOL_TLSv1_1", None),
-                "tlsv1": getattr(ssl, "PROTOCOL_TLSv1", None),
-            }
-            key = self.tls_version.lower()
-            if key in tls_versions:
-                tls_version = tls_versions[key]
-                if tls_version is None:
-                    self.logger.error(
-                        f"TLS version '{self.tls_version}' is not supported on this Python"
-                    )
-                    return False
-            else:
-                tls_version = ssl.PROTOCOL_TLS
-            cert_required = ssl.CERT_NONE if self.insecure else ssl.CERT_REQUIRED
-            self.mqtt_client.tls_set(  # pyright: ignore[reportUnknownMemberType] - paho stubs type cert_reqs as Unknown
-                ca_certs=self.cacerts,
-                certfile=None,
-                keyfile=None,
-                cert_reqs=cert_required,
-                tls_version=tls_version,
-                ciphers=None,
-            )
+            if self.tls_version.lower() != "tlsv1.2":
+                self.logger.error("TLS 1.0/1.1 are unsupported; use TLS 1.2 minimum")
+                return False
+            context = ssl.create_default_context(cafile=self.cacerts)
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+            if self.insecure:
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+                self.logger.warning("MQTT server certificate verification disabled")
+            self.mqtt_client.tls_set_context(context)  # pyright: ignore[reportUnknownMemberType] - upstream context stub
             return True
         except ssl.SSLError as ssl_ex:
             self.logger.error(f"SSL setup error: {ssl_ex}")
@@ -193,7 +263,7 @@ class MqttHandler:
     def setup(self) -> bool:
         self._closed = False
         try:
-            clientid = self.clientid or ("" if self.qos == 0 else socket.gethostname())
+            clientid = self.clientid or f"modpoll-{uuid.uuid4().hex}"
 
             if self.mqtt_version == "5.0":
                 self.mqtt_client = MQTTClient(
@@ -209,6 +279,8 @@ class MqttHandler:
                     protocol=MQTTProtocolVersion.MQTTv311,
                 )
 
+            self.mqtt_client.max_queued_messages_set(self.tx_queue_size)
+            self.mqtt_client.reconnect_delay_set(min_delay=1, max_delay=60)
             if self.use_tls and not self._setup_tls():
                 return False
 
@@ -238,6 +310,41 @@ class MqttHandler:
             except MQTTException as ex:
                 self.logger.error(f"Error stopping MQTT loop: {ex}")
 
+    def start(self) -> bool:
+        """Start Paho's reconnecting network loop without blocking the poll owner."""
+        if not self.mqtt_client or self._closed:
+            return False
+        try:
+            self.mqtt_client.will_set(
+                self.status_topic,
+                json.dumps({"online": False}),
+                qos=self.qos,
+                retain=True,
+            )
+            if self.mqtt_version == "5.0":
+                from paho.mqtt.packettypes import PacketTypes
+                from paho.mqtt.properties import Properties
+
+                properties = Properties(PacketTypes.CONNECT)
+                properties.SessionExpiryInterval = self.session_expiry
+                self.mqtt_client.connect_async(
+                    host=self.host,
+                    port=self.port,
+                    keepalive=60,
+                    clean_start=self.clean_start_or_session,
+                    properties=properties,
+                )
+            else:
+                self.mqtt_client.connect_async(
+                    host=self.host, port=self.port, keepalive=60
+                )
+            self.mqtt_client.loop_start()
+            return True
+        except (OSError, MQTTException, TypeError, ValueError) as exc:
+            self.logger.error("MQTT connection error: %s", exc)
+            self._stop_mqtt_loop()
+            return False
+
     def connect(self) -> bool:
         if not self.mqtt_client:
             self.logger.error("MQTT client not initialized. Call setup() first.")
@@ -258,37 +365,13 @@ class MqttHandler:
         self._connected_event.clear()
         self._connect_rc = None
 
-        try:
-            self.mqtt_client.will_set(
-                _MQTT_STATUS_TOPIC,
-                json.dumps({"online": False}),
-                qos=self.qos,
-                retain=True,
-            )
-            if self.mqtt_version == "5.0":
-                self.mqtt_client.connect_async(
-                    host=self.host,
-                    port=self.port,
-                    keepalive=60,
-                    clean_start=self.clean_start_or_session,
-                )
-            else:
-                self.mqtt_client.connect_async(
-                    host=self.host,
-                    port=self.port,
-                    keepalive=60,
-                )
-            self.mqtt_client.loop_start()
-        except (OSError, MQTTException, TypeError, ValueError) as ex:
-            self.logger.error(f"MQTT connection error: {ex}")
-            self._stop_mqtt_loop()
+        if not self.start():
             return False
 
         deadline = time.monotonic() + _MQTT_CONNECT_TIMEOUT
         while time.monotonic() < deadline:
             if self._connected_event.is_set():
                 if self._connect_succeeded():
-                    self.publish_status(True)
                     return True
                 self._stop_mqtt_loop()
                 return False
@@ -304,7 +387,7 @@ class MqttHandler:
 
     def publish_status(self, online: bool) -> MQTTMessageInfo | None:
         return self.publish(
-            _MQTT_STATUS_TOPIC,
+            self.status_topic,
             json.dumps({"online": online}),
             qos=self.qos,
             retain=True,
@@ -323,34 +406,85 @@ class MqttHandler:
         qos = self.qos if qos is None else qos
 
         if not self.mqtt_client.is_connected():
-            if qos == 0:
-                self.logger.warning(
-                    "MQTT client not connected and QoS is 0, skipping publish."
-                )
-                return None
-            self.logger.warning("MQTT client not connected, attempting to reconnect.")
-            if not self.connect():
-                return None
+            self.publish_errors += 1
+            self.logger.warning("MQTT disconnected; publication skipped")
+            return None
 
         try:
-            pubinfo = self.mqtt_client.publish(topic, msg, qos, retain)
+            with self._pending_lock:
+                self._pending = [
+                    info for info in self._pending if not info.is_published()
+                ]
+                if len(self._pending) >= self.tx_queue_size:
+                    self.publish_errors += 1
+                    return None
+                pubinfo = self.mqtt_client.publish(topic, msg, qos, retain)
+                if pubinfo.rc == 0:
+                    self._pending.append(pubinfo)
             self.logger.debug(
                 f"Publishing MQTT topic: {topic}, msg: {msg}, qos: {qos}, RC: {pubinfo.rc}"
             )
-            self.logger.info(f"Publish message to topic: {topic}")
+            if pubinfo.rc != 0:
+                self.publish_errors += 1
+                return None
+            self.logger.debug("Accepted MQTT publish to %s", topic)
             return pubinfo
-        except MQTTException as ex:
+        except (MQTTException, ValueError, TypeError) as ex:
+            self.publish_errors += 1
             self.logger.error(
                 f"Failed to publish MQTT topic: {topic}, msg: {msg}, qos: {qos}. Error: {ex}"
             )
             return None
 
     def receive(self) -> tuple[str | None, bytes | None]:
-        try:
-            topic, payload = self.rx_queue.get(block=False)
-            return topic, payload
-        except queue.Empty:
-            return None, None
+        # Drain only a bounded number before serving normal commands.
+        for _ in range(10):
+            try:
+                topic, payload, reason = self._rejections.get_nowait()
+                self._publish_rejection(topic, payload, reason)
+            except queue.Empty:
+                break
+        while True:
+            try:
+                with self._rx_lock:
+                    item = self.rx_queue.get(block=False)
+                    topic, payload = item[0], item[1]
+                    self._queued_bytes = max(0, self._queued_bytes - len(payload))
+                    if self.rx_queue.empty():
+                        self.wakeup.clear()
+                if len(item) == 3 and time.monotonic() - item[2] > self.command_ttl:
+                    self.expired_messages += 1
+                    self._publish_rejection(topic, payload, "queue_expired")
+                    continue
+                return topic, payload
+            except queue.Empty:
+                return None, None
+
+    def publish_response(self, topic: str, msg: str) -> MQTTMessageInfo | None:
+        return self.publish(topic, msg, retain=False)
+
+    def wait(self, timeout: float) -> None:
+        self.wakeup.wait(min(timeout, 0.1))
+
+    def flush(self, timeout: float | None = None) -> bool:
+        deadline = time.monotonic() + (
+            self.shutdown_timeout if timeout is None else timeout
+        )
+        with self._pending_lock:
+            pending = list(self._pending)
+        for info in pending:
+            if info.is_published():
+                continue
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            try:
+                info.wait_for_publish(timeout=remaining)
+                if not info.is_published():
+                    return False
+            except (RuntimeError, ValueError, MQTTException):
+                return False
+        return True
 
     def is_connected(self) -> bool:
         return self.mqtt_client is not None and self.mqtt_client.is_connected()
@@ -362,6 +496,7 @@ class MqttHandler:
         if self.mqtt_client:
             if self.mqtt_client.is_connected():
                 self.publish_status(False)
+                self.flush()
             self._stop_mqtt_loop()
         else:
             self.logger.warning("MQTT client not initialized, nothing to close.")

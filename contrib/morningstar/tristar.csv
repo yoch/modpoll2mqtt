@@ -53,10 +53,10 @@ ref,Minimum Battery Voltage (Daily),65,float16,r
 ref,Maximum Battery Voltage (Daily),66,float16,r
 ref,Ah Charge (Daily),67,float16,r
 ref,Ah Load (Daily),68,float16,r
-ref,Array Fault Bitfield,69,int16,r
-ref,Load Fault Bitfield,70,int16,r
-ref,Alarm Bitfield HI,71,int16,r
-ref,Alarm Bitfield LO,72,int16,r
+ref,Array Fault Bitfield at 69,69,int16,r
+ref,Load Fault Bitfield at 70,70,int16,r
+ref,Alarm Bitfield HI at 71,71,int16,r
+ref,Alarm Bitfield LO at 72,72,int16,r
 ref,Time in Absorption,73,int16,r
 ref,Time in Equalization,74,int16,r
 ref,Time in Float,75,int16,r

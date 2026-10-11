@@ -62,7 +62,8 @@ def test_on_poll_unavailable_autoremove_after_three_cycles():
     for _ in range(3):
         handler.on_poll_unavailable()
 
-    assert poller.disabled is True
+    assert poller.disabled is False
+    assert poller.failcounter == 0
 
 
 def test_connection_manager_backoff_is_non_blocking_after_failure():

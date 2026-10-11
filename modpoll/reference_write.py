@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import math
+import struct
 from collections.abc import Sequence
 from typing import Protocol, TypeGuard
 
@@ -15,6 +17,7 @@ from .types import ModbusClient, ModbusValue, is_bool_list, is_numeric_modbus_va
 
 
 class _WriteHandler(Protocol):
+    bit_write_strategy: str
     modbus_client: ModbusClient
     logger: logging.Logger
 
@@ -23,7 +26,7 @@ class _WriteHandler(Protocol):
 
 
 def _value_to_raw(ref: Reference, value: ModbusValue) -> ModbusValue:
-    if ref.scale and is_numeric_modbus_value(value):
+    if ref.scale is not None and is_numeric_modbus_value(value):
         raw = value / float(ref.scale)
         if ref.dtype in (
             "int16",
@@ -52,43 +55,79 @@ def _expect_bool_list(
     return True
 
 
+def validate_write(
+    handler: _WriteHandler, device_name: str, ref_name: str, value: ModbusValue
+) -> tuple[Device, Reference, Poller]:
+    dev = _find_device(handler, device_name)
+    if dev is None:
+        raise ValueError(f"Device {device_name} not found")
+    ref = dev.references.get(ref_name)
+    if ref is None:
+        raise ValueError(f"Unknown reference '{ref_name}'")
+    poller = _find_poller_for_ref(dev, ref)
+    if poller is None:
+        raise ValueError(f"No unambiguous poller for '{ref_name}'")
+    if "w" not in ref.rw or poller.fc not in (1, 3):
+        raise ValueError(
+            f"Reference '{ref_name}' is not writable (read-only Modbus object)"
+        )
+    if poller.disabled:
+        raise ValueError(f"Poller disabled for '{ref_name}'")
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError("Value must be finite")
+    if ref.dtype == "bool":
+        if not isinstance(value, bool):
+            raise ValueError("Expected a boolean")
+    elif ref.dtype in ("bool8", "bool16"):
+        width = 8 if ref.dtype == "bool8" else 16
+        if not is_bool_list(value, width):
+            raise ValueError(f"Expected {width} booleans")
+        if (
+            poller.fc == 1
+            and (ref.address - poller.start_address) * 8 + width > poller.size
+        ):
+            raise ValueError("Cannot write a partial coil group")
+    elif ref.dtype.startswith("string"):
+        if not isinstance(value, str) or len(value.encode("utf-8")) > ref.string_bytes:
+            raise ValueError(f"Expected at most {ref.string_bytes} UTF-8 bytes")
+    else:
+        raw = _value_to_raw(ref, value)
+        if not is_numeric_modbus_value(raw):
+            raise ValueError("Expected a numeric value")
+        if isinstance(raw, float) and not math.isfinite(raw):
+            raise ValueError("Scaled value must be finite")
+        if ref.dtype.startswith(("int", "uint")):
+            bits = int(ref.dtype.lstrip("uint"))
+            signed = ref.dtype.startswith("int")
+            low, high = (
+                (-(1 << (bits - 1)), (1 << (bits - 1)) - 1)
+                if signed
+                else (0, (1 << bits) - 1)
+            )
+            if isinstance(raw, float) and not raw.is_integer():
+                raise ValueError("Integer reference requires an integral value")
+            if not low <= raw <= high:
+                raise ValueError(f"Value outside {ref.dtype} range")
+        else:
+            bits = int(ref.dtype[5:])
+            try:
+                struct.pack({16: "e", 32: "f", 64: "d"}[bits], float(raw))
+            except (OverflowError, struct.error) as exc:
+                raise ValueError(f"Value outside {ref.dtype} range") from exc
+    return dev, ref, poller
+
+
 def write_reference(
     handler: _WriteHandler, device_name: str, ref_name: str, value: ModbusValue
 ) -> bool:
-    dev = _find_device(handler, device_name)
-    if dev is None:
-        handler.logger.error(f"Device {device_name} not found")
+    try:
+        dev, ref, poller = validate_write(handler, device_name, ref_name, value)
+        if poller.fc == 1:
+            return _write_coil_reference(handler, dev, ref, poller, value)
+        return _write_register_reference(handler, dev, ref, poller, value)
+    except (ValueError, IndexError, OverflowError, struct.error) as exc:
+        handler.logger.error("Invalid write %s/%s: %s", device_name, ref_name, exc)
         return False
-
-    ref = dev.references.get(ref_name)
-    if ref is None:
-        handler.logger.error(
-            f"Reference '{ref_name}' not found on device {device_name}"
-        )
-        return False
-
-    if "w" not in ref.rw:
-        handler.logger.error(
-            f"Reference '{ref_name}' on device {device_name} is not writable"
-        )
-        return False
-
-    poller = _find_poller_for_ref(dev, ref)
-    if poller is None:
-        handler.logger.error(
-            f"No poller found for reference '{ref_name}' on device {device_name}"
-        )
-        return False
-
-    if poller.fc in (2, 4):
-        handler.logger.error(
-            f"Reference '{ref_name}' is on a read-only Modbus object type"
-        )
-        return False
-
-    if poller.fc == 1:
-        return _write_coil_reference(handler, dev, ref, poller, value)
-    return _write_register_reference(handler, dev, ref, poller, value)
 
 
 def _write_coil(handler: _WriteHandler, dev: Device, address: int, value: bool) -> bool:
@@ -137,20 +176,6 @@ def _write_registers(
     return not result.isError()
 
 
-def _read_coils(
-    handler: _WriteHandler, dev: Device, address: int, count: int
-) -> list[bool] | None:
-    result = _call_with_device_id(
-        handler.modbus_client.read_coils,
-        address,
-        count=count,
-        device_id=dev.devid,
-    )
-    if not result.isError():
-        return result.bits
-    return None
-
-
 def _read_holding_registers(
     handler: _WriteHandler, dev: Device, address: int, count: int
 ) -> list[int] | None:
@@ -182,20 +207,37 @@ def _write_coil_reference(
         width = 8 if ref.dtype == "bool8" else 16
         if not _expect_bool_list(value, width, ref, handler.logger):
             return False
-        group_offset = ref.address - poller.start_address
-        bit_offset = group_offset * 8
-        bits = _read_coils(handler, dev, poller.start_address, poller.size)
-        if bits is None:
-            return False
-        current = list(bits)
-        for i, bit_val in enumerate(value):
-            current[bit_offset + i] = bool(bit_val)
-        return _write_coils(handler, dev, poller.start_address, current)
+        address = poller.start_address + (ref.address - poller.start_address) * 8
+        return _write_coils(handler, dev, address, value)
 
     handler.logger.error(
         f"Unsupported dtype '{ref.dtype}' for coil write on reference '{ref.name}'"
     )
     return False
+
+
+def _mask_write(
+    handler: _WriteHandler,
+    dev: Device,
+    ref: Reference,
+    poller: Poller,
+    mask: int,
+    value: int,
+) -> bool:
+    encoder = _get_encoder(poller)
+    encoder.encode_16bit_uint(mask)
+    raw_mask = encoder.to_registers()[0]
+    encoder = _get_encoder(poller)
+    encoder.encode_16bit_uint(value)
+    raw_value = encoder.to_registers()[0]
+    result = _call_with_device_id(
+        handler.modbus_client.mask_write_register,
+        address=ref.address,
+        and_mask=(~raw_mask) & 0xFFFF,
+        or_mask=raw_value & raw_mask,
+        device_id=dev.devid,
+    )
+    return not result.isError()
 
 
 def _write_register_reference(
@@ -209,22 +251,31 @@ def _write_register_reference(
         if not isinstance(value, bool):
             handler.logger.error(f"Reference '{ref.name}' expects a boolean value")
             return False
+        if handler.bit_write_strategy == "mask":
+            return _mask_write(
+                handler, dev, ref, poller, 1 << ref.bit, (1 << ref.bit) if value else 0
+            )
         registers = _read_holding_registers(handler, dev, ref.address, 1)
         if registers is None:
             return False
-        word = registers[0]
-        if value:
-            word |= 1 << ref.bit
-        else:
-            word &= ~(1 << ref.bit)
-        return _write_register(handler, dev, ref.address, word & 0xFFFF)
+        if len(registers) != 1:
+            return False
+        word = poller.get_decoder(registers).decode_16bit_uint()
+        word = word | (1 << ref.bit) if value else word & ~(1 << ref.bit)
+        encoder = _get_encoder(poller)
+        encoder.encode_16bit_uint(word)
+        raw = encoder.to_registers()[0]
+        return _write_register(handler, dev, ref.address, raw)
 
     if ref.dtype in ("bool8", "bool16"):
         width = 8 if ref.dtype == "bool8" else 16
         if not _expect_bool_list(value, width, ref, handler.logger):
             return False
+        if handler.bit_write_strategy == "mask":
+            word = sum(int(bit) << i for i, bit in enumerate(value))
+            return _mask_write(handler, dev, ref, poller, (1 << width) - 1, word)
         registers = _read_holding_registers(handler, dev, ref.address, 1)
-        if registers is None:
+        if registers is None or len(registers) != 1:
             return False
         word = poller.get_decoder(registers).decode_16bit_uint()
         for i, bit_val in enumerate(value):
@@ -276,6 +327,8 @@ def _write_register_reference(
         if not isinstance(value, str):
             handler.logger.error(f"Reference '{ref.name}' expects a string value")
             return False
+        size = ref.string_bytes
+        # Apply word order to complete registers, then fill the reserved pad byte.
         size = ref.ref_width * 2
         encoder.encode_string(value, size)
         registers = encoder.to_registers()

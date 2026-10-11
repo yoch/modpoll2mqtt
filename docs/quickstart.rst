@@ -33,3 +33,14 @@ Publish to ``modpoll/{device}/set``:
     }
 
 See :doc:`usage` for MQTT topics, write constraints (including ``bool8`` array values), and read-only object types.
+
+Validate before running
+-----------------------
+
+.. code-block:: shell
+
+    modpoll --check-config --config examples/modsim.csv
+
+For separate gateways sharing a broker, give each process its own
+``--mqtt-namespace`` and, if persistent sessions are needed, ``--mqtt-clientid``.
+Use :doc:`consolidation` to configure bounded queues and safe command handling.

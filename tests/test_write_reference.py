@@ -36,7 +36,7 @@ def _endian_pair(endian):
     return ENDIAN_MAP[endian]
 
 
-def test_write_coil_bool8_read_modify_write():
+def test_write_coil_bool8_targets_only_its_group():
     device = Device("dev", 1)
     poller = Poller(device, 1, 0, 16, "BE_BE")
     ref = Reference(device, "flags", "1", "bool8", "rw", None, None)
@@ -50,9 +50,9 @@ def test_write_coil_bool8_read_modify_write():
     new_flags = [True, False, True, False, False, False, False, False]
     assert handler.write_reference("dev", "flags", new_flags) is True
     assert master.writes[0][0] == "coils"
-    assert master.writes[0][1] == 0
+    assert master.writes[0][1] == 8
     written = master.writes[0][2]
-    assert written[8:16] == new_flags
+    assert written == new_flags
 
 
 def test_write_holding_bool16_read_modify_write():

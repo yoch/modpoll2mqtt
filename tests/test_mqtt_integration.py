@@ -121,7 +121,7 @@ def test_mqtt_integration_mqtt_v311_connect(mqtt_broker, unique_mqtt_client_id):
 def test_mqtt_integration_publish_reconnects_after_disconnect(
     mqtt_broker, unique_mqtt_client_id, unique_mqtt_topic
 ):
-    """publish() with QoS>0 must reconnect when the broker session drops."""
+    """Publishing during an outage returns immediately; reconnect runs separately."""
     handler = _make_handler(mqtt_broker, unique_mqtt_client_id, qos=1)
     try:
         _connect(handler)
@@ -132,9 +132,10 @@ def test_mqtt_integration_publish_reconnects_after_disconnect(
         assert not handler.is_connected()
 
         info = handler.publish(unique_mqtt_topic, "modpoll-after-disconnect", qos=1)
-        assert info is not None
-        assert info.rc == 0
-        assert handler.is_connected()
+        assert info is None
+        assert not handler.is_connected()
+        assert handler.connect()
+        assert handler.publish(unique_mqtt_topic, "after-reconnect", qos=1) is not None
     finally:
         handler.close()
 

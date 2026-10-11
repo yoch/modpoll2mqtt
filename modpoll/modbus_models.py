@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import logging
+import math
+import re
+import struct
 from typing import Any
 
 from .reference_common import call_with_device_id as _call_with_device_id
 from .register_decode import ENDIAN_MAP, RegisterDecoder
 from .types import ModbusClient, ModbusValue, is_numeric_modbus_value
+from .utils import get_utc_time
 
 
 class Device:
@@ -50,11 +54,11 @@ class Poller:
         self.readableReferences: list[Reference] = []
         self.disabled = False
         self.failcounter = 0
+        self.retry_at: float | None = None
         self.logger = logging.getLogger(__name__)
 
     def poll(self, master: ModbusClient) -> bool:
         result = None
-        data: list[int] | None = None
 
         def _call_read(method: Any) -> Any:
             return _call_with_device_id(
@@ -73,52 +77,45 @@ class Poller:
         elif self.fc == 4:
             result = _call_read(master.read_input_registers)
 
-        if result is not None and not result.isError():
-            if self.fc in (1, 2):
-                bits = result.bits
-                if bits is None:
-                    self.update_statistics(False)
-                    for ref in self.readableReferences:
-                        ref.update_value(None)
-                    return False
-                sorted_refs = sorted(self.readableReferences, key=lambda r: r.address)
-                for ref in sorted_refs:
-                    try:
-                        value = self.decode_coil_bits(ref, bits, self.start_address)
-                        ref.update_value(value)
-                    except IndexError:
-                        self.logger.error(
-                            f"Reference {ref.name} address {ref.address} is outside "
-                            f"of poller range starting at {self.start_address}"
-                        )
-                    except Exception:
-                        self.logger.error(
-                            f"Failed to decode value for reference: {ref.name}"
-                        )
-            else:
-                data = result.registers
-                if data is None:
-                    self.update_statistics(False)
-                    for ref in self.readableReferences:
-                        ref.update_value(None)
-                    return False
-                sorted_refs = sorted(self.readableReferences, key=lambda r: r.address)
-                for ref in sorted_refs:
-                    try:
-                        ref.update_value(
-                            self.decode_register_block(ref, data, self.start_address)
-                        )
-                    except Exception as e:
-                        self.logger.error(
-                            f"Failed to decode value for reference: {ref.name} - {e}"
-                        )
-            self.update_statistics(True)
-            return True
+        if result is None or result.isError():
+            self.update_statistics(False)
+            for ref in self.readableReferences:
+                ref.update_value(None)
+            return False
 
-        self.update_statistics(False)
+        block = result.bits if self.fc in (1, 2) else result.registers
+        expected = self.size
+        if block is None or len(block) < expected:
+            self.update_statistics(False)
+            for ref in self.readableReferences:
+                ref.update_value(None)
+            return False
+        successes = 0
+        failures = 0
         for ref in self.readableReferences:
-            ref.update_value(None)
-        return False
+            try:
+                value = (
+                    self.decode_coil_bits(ref, block[: self.size], self.start_address)
+                    if self.fc in (1, 2)
+                    else self.decode_register_block(ref, block, self.start_address)
+                )
+                ref.update_value(value)
+                if ref.val is None:
+                    failures += 1
+                else:
+                    successes += 1
+                if self.fc in (1, 2) and ref.dtype in ("bool8", "bool16"):
+                    width = 8 if ref.dtype == "bool8" else 16
+                    if (ref.address - self.start_address) * 8 + width > self.size:
+                        ref.quality = "partial"
+            except (ValueError, IndexError, struct.error, OverflowError) as exc:
+                ref.update_value(None)
+                failures += 1
+                self.logger.error("Failed to decode reference %s: %s", ref.name, exc)
+        self.update_statistics(failures == 0)
+        if successes:
+            self.device.pollSuccess = True
+        return failures == 0
 
     def get_decoder(self, data: list[int]) -> RegisterDecoder:
         byteorder, wordorder = ENDIAN_MAP[self.endian.strip().upper()]
@@ -189,12 +186,15 @@ class Poller:
             return decode_methods[ref.dtype]()
         if ref.dtype.startswith("string"):
             return (
-                decoder.decode_string(ref.ref_width * 2).decode("utf-8").rstrip("\x00")
+                decoder.decode_string(ref.ref_width * 2)[: ref.string_bytes]
+                .decode("utf-8")
+                .rstrip("\x00")
             )
         raise ValueError(f"Unsupported dtype '{ref.dtype}' for register decode")
 
     def add_readable_reference(self, ref: Reference) -> None:
-        if ref not in self.readableReferences:
+        ref.poller = self
+        if not any(existing is ref for existing in self.readableReferences):
             self.readableReferences.append(ref)
 
     def update_statistics(self, success: bool) -> None:
@@ -219,6 +219,7 @@ class Reference:
         scale: float | None,
     ) -> None:
         self.device = device
+        self.poller: Poller | None = None
         self.name = ref_name
         self.bit: int | None = None
         try:
@@ -239,11 +240,35 @@ class Reference:
                 f"Bit index syntax (address:bit) can only be used with dtype 'bool', "
                 f"but reference {ref_name} has dtype '{self.dtype}'"
             )
+        if self.dtype not in {
+            "bool",
+            "bool8",
+            "bool16",
+            "int16",
+            "uint16",
+            "int32",
+            "uint32",
+            "int64",
+            "uint64",
+            "float16",
+            "float32",
+            "float64",
+        } and not re.fullmatch(r"string[1-9][0-9]*", self.dtype):
+            raise ValueError(f"Unsupported dtype: {dtype}")
+        self.string_bytes = (
+            int(self.dtype[6:]) if self.dtype.startswith("string") else 0
+        )
         self.ref_width = self._get_ref_width()
         self.rw = rw.lower()
         self.unit = unit
+        if scale is not None and (not math.isfinite(scale) or scale == 0):
+            raise ValueError("Scale must be finite and nonzero")
         self.scale = scale
         self.val: ModbusValue = None
+        self.last_value: ModbusValue = None
+        self.last_success_at: float | None = None
+        self.last_attempt_at: float | None = None
+        self.quality = "unavailable"
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, Reference):
@@ -271,7 +296,7 @@ class Reference:
             "int32": 2,
             "uint32": 2,
             "float32": 2,
-            "bool16": 2,
+            "bool16": 1,
             "int64": 4,
             "uint64": 4,
             "float64": 4,
@@ -292,18 +317,26 @@ class Reference:
             if self.dtype == "bool" and self.bit is None:
                 return self.address in range(reference, size + reference)
             if self.dtype in ("bool8", "bool16"):
-                width = 16 if self.dtype == "bool16" else 8
                 group_offset = self.address - reference
-                return group_offset >= 0 and group_offset * width < size
+                return group_offset >= 0 and group_offset * 8 < size
             return False
         return self.address in range(
             reference, size + reference
         ) and self.address + self.ref_width - 1 in range(reference, size + reference)
 
+    def invalidate(self) -> None:
+        """Discard the current snapshot without claiming a bus read took place."""
+        self.val = None
+        self.quality = "unavailable"
+
     def update_value(self, v: ModbusValue) -> None:
-        if self.scale and is_numeric_modbus_value(v):
-            try:
-                v = v * float(self.scale)
-            except (ValueError, TypeError):
-                pass
+        self.last_attempt_at = get_utc_time()
+        if self.scale is not None and is_numeric_modbus_value(v):
+            v = v * self.scale
+        if isinstance(v, float) and not math.isfinite(v):
+            v = None
         self.val = v
+        self.quality = "good" if v is not None else "unavailable"
+        if v is not None:
+            self.last_value = v
+            self.last_success_at = self.last_attempt_at

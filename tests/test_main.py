@@ -29,6 +29,7 @@ def test_mqtt_tls_cli_options_forwarded(monkeypatch):
             log_level,
             rx_queue_size=1000,
             retain_data_publishes=False,
+            **kwargs,
         ):
             captured["init"] = {
                 "name": name,
@@ -59,12 +60,30 @@ def test_mqtt_tls_cli_options_forwarded(monkeypatch):
             captured["closed"] = True
 
         def receive(self):
+            main.set_threading_event()
             return None, None
 
-    def fake_setup_modbus_handlers(args, mqtt_handler):
+        def start(self):
+            return self.connect()
+
+        def publish_response(self, topic, msg):
+            return self.publish_data_message(topic, msg)
+
+        def wait(self, timeout):
+            main.delay_thread(timeout)
+
+        def flush(self, timeout=None):
+            return True
+
+        status_topic = "modpoll/status"
+        publish_errors = 0
+        dropped_messages = expired_messages = subscription_errors = 0
+
+    def fake_setup_modbus_handlers(args, mqtt_handler=None):
         captured["handler_instance"] = mqtt_handler
-        # Stop execution before entering the main polling loop
-        raise SystemExit(0)
+        handler = MagicMock()
+        handler.poll.return_value = True
+        return MagicMock(), [handler]
 
     monkeypatch.setattr(main, "MqttHandler", FakeMqttHandler)
     monkeypatch.setattr(main, "setup_modbus_handlers", fake_setup_modbus_handlers)
@@ -92,10 +111,7 @@ def test_mqtt_tls_cli_options_forwarded(monkeypatch):
         ],
     )
 
-    with pytest.raises(SystemExit) as excinfo:
-        main.app()
-
-    assert excinfo.value.code == 0
+    main.app()
     init_args = captured["init"]
     assert init_args["rx_queue_size"] == 500
     assert init_args["use_tls"] is True
@@ -103,7 +119,11 @@ def test_mqtt_tls_cli_options_forwarded(monkeypatch):
     assert init_args["cacerts"] == "/tmp/ca.pem"
     assert init_args["insecure"] is True
     assert init_args["mqtt_version"] == "3.1.1"
-    assert init_args["subscribe_topics"] == ["modpoll/+/set", "modpoll/+/get"]
+    assert init_args["subscribe_topics"] == [
+        "modpoll/+/get",
+        "modpoll/+/commands",
+        "modpoll/+/set",
+    ]
     assert init_args["retain_data_publishes"] is False
 
 
@@ -124,10 +144,29 @@ def test_mqtt_retain_cli_option_forwarded(monkeypatch):
             pass
 
         def receive(self):
+            main.set_threading_event()
             return None, None
 
-    def fake_setup_modbus_handlers(args, mqtt_handler):
-        raise SystemExit(0)
+        def start(self):
+            return self.connect()
+
+        def publish_response(self, topic, msg):
+            return self.publish_data_message(topic, msg)
+
+        def wait(self, timeout):
+            main.delay_thread(timeout)
+
+        def flush(self, timeout=None):
+            return True
+
+        status_topic = "modpoll/status"
+        publish_errors = 0
+        dropped_messages = expired_messages = subscription_errors = 0
+
+    def fake_setup_modbus_handlers(args, mqtt_handler=None):
+        handler = MagicMock()
+        handler.poll.return_value = True
+        return MagicMock(), [handler]
 
     monkeypatch.setattr(main, "MqttHandler", FakeMqttHandler)
     monkeypatch.setattr(main, "setup_modbus_handlers", fake_setup_modbus_handlers)
@@ -146,10 +185,7 @@ def test_mqtt_retain_cli_option_forwarded(monkeypatch):
         ],
     )
 
-    with pytest.raises(SystemExit) as excinfo:
-        main.app()
-
-    assert excinfo.value.code == 0
+    main.app()
     assert captured["retain_data_publishes"] is True
 
 
@@ -189,8 +225,7 @@ def test_mqtt_rx_queue_size_zero_exits(monkeypatch, caplog):
         with pytest.raises(SystemExit) as excinfo:
             main.app()
 
-    assert excinfo.value.code == 1
-    assert "MQTT rx queue size must be at least 1" in caplog.text
+    assert excinfo.value.code == 2
 
 
 def test_mqtt_subscribe_pattern_without_plus_exits(monkeypatch):
@@ -213,7 +248,7 @@ def test_mqtt_subscribe_pattern_without_plus_exits(monkeypatch):
     with pytest.raises(SystemExit) as excinfo:
         main.app()
 
-    assert excinfo.value.code == 1
+    assert excinfo.value.code == 2
 
 
 def test_extract_device_from_mqtt_topic():
@@ -264,9 +299,27 @@ def test_mqtt_setup_close_errors_are_suppressed(monkeypatch):
         def close(self):
             raise RuntimeError("close exploded")
 
+        def start(self):
+            return self.connect()
+
+        def publish_response(self, topic, msg):
+            return self.publish_data_message(topic, msg)
+
+        def wait(self, timeout):
+            main.delay_thread(timeout)
+
+        def flush(self, timeout=None):
+            return True
+
+        status_topic = "modpoll/status"
+        publish_errors = 0
+        dropped_messages = expired_messages = subscription_errors = 0
+
     monkeypatch.setattr(main, "MqttHandler", FakeMqttHandler)
     monkeypatch.setattr(
-        main, "setup_modbus_handlers", lambda args, mqtt_handler: (MagicMock(), [])
+        main,
+        "setup_modbus_handlers",
+        lambda args, mqtt_handler=None: (MagicMock(), [MagicMock()]),
     )
     monkeypatch.setattr(
         sys,

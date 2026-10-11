@@ -106,7 +106,7 @@ poetry config keyring.enabled false
 
     ```bash
     make test-integration-modbus   # auto-starts a local Modbus TCP simulator on port 1502 if needed
-    make test-integration-mqtt     # requires a broker (default broker.emqx.io)
+    make test-integration-mqtt     # auto-starts local Mosquitto (install mosquitto first)
     make test-integration          # both
     ```
 
@@ -115,6 +115,9 @@ poetry config keyring.enabled false
     ```bash
     poetry run python tests/modbus_integration.py
     ```
+
+    CI also tests minimum/latest pymodbus and installed wheels (`make smoke-wheel`).
+    `MODPOLL_REQUIRE_INTEGRATION=1` turns unavailable infrastructure into failures.
 
     Override endpoints with `MODBUS_TEST_HOST` / `MODBUS_TEST_PORT` or
     `MQTT_TEST_HOST` / `MQTT_TEST_PORT` when needed.
@@ -150,8 +153,8 @@ The workflow publishes the package to PyPI (trusted publisher / OIDC) and deploy
 
 ### Documentation checklist (required before every release)
 
-There is no automated doc gate in CI. **Agents and maintainers must verify
-documentation manually** whenever code or CLI options change — especially before
+CI builds documentation on pull requests with warnings as errors. **Agents and maintainers must also verify
+documentation content** whenever code or CLI options change — especially before
 tagging a release.
 
 1. **`CHANGELOG.md`** — add or move entries under `[Unreleased]`; each new CLI

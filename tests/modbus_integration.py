@@ -42,9 +42,32 @@ def tcp_reachable(host: str, port: int, timeout: float = 3.0) -> bool:
 
 
 def _run_modbus_server(host: str, port: int) -> None:
-    block = ModbusSequentialDataBlock(1, [0] * 50000)
-    device = ModbusDeviceContext(di=block, co=block, hr=block, ir=block)
-    context = ModbusServerContext(devices=device, single=True)
+    try:
+        from pymodbus.simulator import DataType, SimData, SimDevice
+    except ImportError:
+
+        def device():
+            return ModbusDeviceContext(
+                **{
+                    name: ModbusSequentialDataBlock(1, [0] * 50000)
+                    for name in ("di", "co", "hr", "ir")
+                }
+            )
+
+        context = ModbusServerContext(devices={1: device(), 2: device()}, single=False)
+    else:
+        context = [
+            SimDevice(
+                identifier,
+                simdata=(
+                    [SimData(0, values=[False] * 50000, datatype=DataType.BITS)],
+                    [SimData(0, values=[False] * 50000, datatype=DataType.BITS)],
+                    [SimData(0, values=[0] * 50000, datatype=DataType.REGISTERS)],
+                    [SimData(0, values=[0] * 50000, datatype=DataType.REGISTERS)],
+                ),
+            )
+            for identifier in (1, 2)
+        ]
     StartTcpServer(context=context, address=(host, port))
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from argparse import ArgumentParser, Namespace
 from collections.abc import Iterable
 from typing import cast
@@ -67,6 +68,107 @@ class ModpollArgumentParser(ArgumentParser):
             and parsed.modbus_max_connection_age <= 0
         ):
             self.error("--modbus-max-connection-age must be greater than 0")
+        for key in (
+            "rate",
+            "timeout",
+            "delay",
+            "diagnostics_rate",
+            "interval",
+            "modbus_backoff_base",
+            "modbus_backoff_max",
+            "poller_recover_after",
+            "mqtt_command_ttl",
+            "mqtt_shutdown_timeout",
+        ):
+            value = getattr(parsed, key)
+            if (
+                not math.isfinite(value)
+                or value < 0
+                or (key in ("rate", "timeout", "mqtt_command_ttl") and value == 0)
+            ):
+                self.error(
+                    f"--{key.replace('_', '-')} must be finite and {'positive' if key in ('rate', 'timeout', 'mqtt_command_ttl') else 'nonnegative'}"
+                )
+        if parsed.modbus_max_connection_age is not None and not math.isfinite(
+            parsed.modbus_max_connection_age
+        ):
+            self.error("--modbus-max-connection-age must be finite")
+        for key in ("tcp_port", "udp_port", "mqtt_port"):
+            if not 1 <= getattr(parsed, key) <= 65535:
+                self.error(f"--{key.replace('_', '-')} must be 1..65535")
+        for key in (
+            "mqtt_rx_queue_size",
+            "mqtt_max_payload_bytes",
+            "mqtt_queue_bytes",
+            "mqtt_tx_queue_size",
+        ):
+            if getattr(parsed, key) < 1:
+                self.error(f"--{key.replace('_', '-')} must be positive")
+        if parsed.mqtt_pass_file and parsed.mqtt_pass:
+            self.error("Use either --mqtt-pass-file or --mqtt-pass")
+        if parsed.mqtt_session_expiry > 4294967295:
+            self.error("--mqtt-session-expiry exceeds MQTT uint32 range")
+        if parsed.mqtt_tls_version != "tlsv1.2":
+            self.error("TLS 1.0/1.1 are unsupported; use --mqtt-tls-version tlsv1.2")
+        if parsed.mqtt_session_expiry < 0:
+            self.error("--mqtt-session-expiry must be nonnegative")
+        if parsed.mqtt_session_expiry and not parsed.mqtt_clientid:
+            self.error("A persistent MQTT session requires --mqtt-clientid")
+        if parsed.mqtt_namespace:
+            prefix = parsed.mqtt_namespace.strip("/")
+            if (
+                not prefix
+                or any(c in prefix for c in "+#\x00")
+                or any(ord(c) < 32 for c in prefix)
+            ):
+                self.error("Invalid --mqtt-namespace")
+            for key in (
+                "mqtt_publish_topic_pattern",
+                "mqtt_subscribe_topic_pattern",
+                "mqtt_get_topic_pattern",
+                "mqtt_diagnostics_topic_pattern",
+                "mqtt_command_topic_pattern",
+            ):
+                value = getattr(parsed, key)
+                if value.startswith("modpoll/"):
+                    setattr(parsed, key, prefix + value[len("modpoll") :])
+        patterns = [
+            parsed.mqtt_subscribe_topic_pattern,
+            parsed.mqtt_get_topic_pattern,
+            parsed.mqtt_command_topic_pattern,
+        ]
+        for pattern in patterns:
+            if (
+                pattern.split("/").count("+") != 1
+                or "#" in pattern
+                or any("+" in part and part != "+" for part in pattern.split("/"))
+                or not pattern
+                or any(ord(c) < 32 for c in pattern)
+                or len(pattern.encode("utf-8")) > 65535
+            ):
+                self.error(
+                    "Command topic patterns require exactly one complete '+' device segment"
+                )
+        for index, left in enumerate(patterns):
+            for right in patterns[index + 1 :]:
+                left_parts, right_parts = left.split("/"), right.split("/")
+                if len(left_parts) == len(right_parts) and all(
+                    a == b or "+" in (a, b) for a, b in zip(left_parts, right_parts)
+                ):
+                    self.error(
+                        "Command topic patterns must be distinct and non-overlapping"
+                    )
+        for pattern in (
+            parsed.mqtt_publish_topic_pattern,
+            parsed.mqtt_diagnostics_topic_pattern,
+        ):
+            if (
+                any(c in pattern for c in "+#\x00")
+                or not pattern
+                or any(ord(c) < 32 for c in pattern)
+                or len(pattern.encode("utf-8")) > 65535
+            ):
+                self.error("Invalid MQTT publish topic pattern")
         return parsed
 
 
@@ -311,5 +413,76 @@ def get_parser() -> ModpollArgumentParser:
         default="default",
         choices=["default", "ascii", "rtu", "socket"],
         help="The type of framer for Modbus messages. Serial supports ascii/rtu; TCP/UDP use socket.",
+    )
+    parser.add_argument(
+        "--check-config",
+        action="store_true",
+        help="Validate all CSV files without opening network or serial transports",
+    )
+    parser.add_argument(
+        "--read-only", action="store_true", help="Disable all MQTT write commands"
+    )
+    parser.add_argument(
+        "--poller-recover-after",
+        type=float,
+        default=0.0,
+        help="Probe disabled pollers after N seconds; 0 keeps permanent --autoremove behavior",
+    )
+    parser.add_argument(
+        "--modbus-bit-write",
+        choices=("read-modify-write", "mask"),
+        default="read-modify-write",
+        help="Use FC22 atomic mask writes when supported, or the legacy non-atomic read-modify-write",
+    )
+    parser.add_argument(
+        "--mqtt-namespace",
+        default=None,
+        help="Prefix for all default data, command, status and diagnostic topics",
+    )
+    parser.add_argument(
+        "--mqtt-command-topic-pattern",
+        default="modpoll/+/commands",
+        help="Versioned get/set command envelope topic",
+    )
+    parser.add_argument(
+        "--mqtt-max-payload-bytes",
+        type=int,
+        default=65536,
+        help="Maximum bytes in one incoming command",
+    )
+    parser.add_argument(
+        "--mqtt-queue-bytes",
+        type=int,
+        default=1048576,
+        help="Maximum total payload bytes in the incoming queue",
+    )
+    parser.add_argument(
+        "--mqtt-tx-queue-size",
+        type=int,
+        default=1000,
+        help="Maximum outgoing MQTT messages buffered by Paho",
+    )
+    parser.add_argument(
+        "--mqtt-command-ttl",
+        type=float,
+        default=30.0,
+        help="Maximum incoming queue age and default command lifetime in seconds",
+    )
+    parser.add_argument(
+        "--mqtt-shutdown-timeout",
+        type=float,
+        default=3.0,
+        help="Maximum seconds to flush MQTT publishes at shutdown",
+    )
+    parser.add_argument(
+        "--mqtt-session-expiry",
+        type=int,
+        default=0,
+        help="Persistent session lifetime (seconds); requires an explicit client ID",
+    )
+    parser.add_argument(
+        "--mqtt-pass-file",
+        default=None,
+        help="Read MQTT password from a protected UTF-8 file instead of an argument",
     )
     return parser

@@ -147,7 +147,7 @@ def test_coil_bool_with_nonzero_poll_start():
     poller = Poller(device, 1, 14, 8, "BE_BE")
     ref = Reference(device, "coil17", "17", "bool", "r", None, None)
     poller.add_readable_reference(ref)
-    bits = [False, False, False, True]
+    bits = [False, False, False, True] + [False] * 4
 
     class FakeMaster:
         def read_coils(self, address, *, count=1, device_id=1):
@@ -263,10 +263,7 @@ def test_bit_syntax_rejected_on_coil_poller_during_config_load():
     )
     handler = ModbusHandler(MagicMock(), "unused")
     devices = handler._parse_config(csv.reader(io.StringIO(config)))
-    assert len(devices) == 1
-    assert len(devices[0].pollerList) == 1
-    assert len(devices[0].pollerList[0].readableReferences) == 0
-    assert len(devices[0].references) == 0
+    assert devices == []
 
 
 def test_tab_delimited_config_loads_with_tab_code():

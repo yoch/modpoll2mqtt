@@ -1,24 +1,25 @@
 from __future__ import annotations
 
-import csv
 import json
 import logging
 import math
+import time
 from argparse import Namespace
 from collections.abc import Iterator
 
-import requests
 from prettytable import PrettyTable
 from pymodbus.client import ModbusSerialClient, ModbusTcpClient, ModbusUdpClient
 from pymodbus.exceptions import ModbusException
 from pymodbus.framer import FramerType
 
+from .configuration import ConfigurationError, parse_config, read_config, safe_source
+from .export import export_snapshot
 from .modbus_models import Device, Poller, Reference
 from .mqtt_task import MqttHandler
 from .reference_common import find_device as _find_device
 from .reference_read import read_references as _read_references
+from .reference_write import validate_write
 from .reference_write import write_reference as _write_reference
-from .register_decode import ENDIAN_MAP
 from .types import (
     ModbusClient,
     ModbusConnectionDiagnostics,
@@ -29,9 +30,6 @@ from .utils import delay_thread, on_threading_event
 
 FLOAT_TYPE_PRECISION = 3
 MQTT_GLOBAL_DIAGNOSTICS_TOPIC = "modpoll/diagnostics"
-CONFIG_DEVICE_COL_MIN = 3
-CONFIG_POLL_COL_MIN = 5
-CONFIG_REF_COL_MIN = 5
 
 CSV_DELIMITER_CODES = {
     "comma": ",",
@@ -68,10 +66,6 @@ def format_mqtt_payload_values(
             continue
         out[key] = mqtt_val
     return out
-
-
-def _poller_identity(poller: Poller) -> tuple[int, int, int, str]:
-    return (poller.fc, poller.start_address, poller.size, poller.endian.upper())
 
 
 def _validate_cross_device_config(
@@ -138,265 +132,76 @@ class ModbusHandler:
         self.mqtt_single_publish = mqtt_single_publish
         self.mqtt_keys = mqtt_keys
         self.autoremove = autoremove
+        self.recover_after = 0.0
+        self.bit_write_strategy = "read-modify-write"
+        self.read_only = False
+        self.command_expires_at: float | None = None
+        self.last_write_results: dict[str, dict[str, str]] = {}
         self.deviceList: list[Device] = []
         self.logger = logging.getLogger(__name__)
 
     def load_config(self) -> bool:
-        self.logger.info(f"Loading config from: {self.config_file}")
+        self.logger.info("Loading config from: %s", safe_source(self.config_file))
         try:
-            with requests.Session() as s:
-                response = s.get(self.config_file, timeout=self.timeout)
-                response.raise_for_status()
-                decoded_content = response.content.decode("utf-8")
-                csv_reader = csv.reader(
-                    decoded_content.splitlines(), delimiter=self.csv_delimiter
-                )
-                self.deviceList = self._parse_config(csv_reader)
-        except requests.RequestException:
-            try:
-                with open(self.config_file) as f:
-                    csv_reader = csv.reader(f, delimiter=self.csv_delimiter)
-                    self.deviceList = self._parse_config(csv_reader)
-            except OSError as e:
-                self.logger.error(f"Error opening file: {e}")
-                return False
-        if self.deviceList:
-            self.logger.info(f"Added {len(self.deviceList)} device(s)...")
-            return True
-        else:
-            self.logger.error(
-                "No device found in the config file. Skipping. "
-                "If columns are not split correctly, try --csv-delimiter "
-                f"({', '.join(sorted(CSV_DELIMITER_CODES))}); "
-                f"current: {self.csv_delimiter_code}"
+            self.deviceList = read_config(
+                self.config_file, self.csv_delimiter, self.timeout, self.logger
             )
+            _validate_cross_device_config(self.deviceList, self.logger)
+            return True
+        except ConfigurationError as exc:
+            self.logger.error("%s", exc)
+            self.deviceList = []
             return False
 
     def _parse_config(self, csv_reader: Iterator[list[str]]) -> list[Device]:
-        device_list: list[Device] = []
-        current_device: Device | None = None
-        current_poller: Poller | None = None
-        seen_device_names: set[str] = set()
         try:
-            for row in csv_reader:
-                if not row or all(cell.strip() == "" for cell in row):
-                    continue
-                if "device" in row[0].lower():
-                    if len(row) < CONFIG_DEVICE_COL_MIN:
-                        self.logger.error("Invalid device configuration")
-                        continue
-                    device_name = row[1].strip()
-                    try:
-                        device_id = int(row[2], 0)
-                    except ValueError:
-                        self.logger.error(f"Invalid device ID for {device_name}")
-                        continue
-                    if device_name in seen_device_names:
-                        self.logger.error(
-                            f"Duplicate device name '{device_name}'; aborting config file"
-                        )
-                        return []
-                    seen_device_names.add(device_name)
-                    current_device = Device(device_name, device_id)
-                    device_list.append(current_device)
-                elif "poll" in row[0].lower():
-                    if not current_device:
-                        self.logger.error("No device to add poller.")
-                        continue
-                    if len(row) < CONFIG_POLL_COL_MIN:
-                        self.logger.error("Invalid poller configuration")
-                        return []
-                    endian_key = row[4].strip().upper()
-                    if endian_key not in ENDIAN_MAP:
-                        self.logger.error(
-                            f"Invalid endian '{row[4].strip()}'; must be one of: "
-                            f"{', '.join(ENDIAN_MAP.keys())}"
-                        )
-                        return []
-                    new_poller = self._create_poller(row, current_device)
-                    if new_poller:
-                        poller_key = _poller_identity(new_poller)
-                        if any(
-                            _poller_identity(p) == poller_key
-                            for p in current_device.pollerList
-                        ):
-                            self.logger.warning(
-                                f"Duplicate poller on device {current_device.name} "
-                                f"(fc={new_poller.fc}, start={new_poller.start_address}, "
-                                f"size={new_poller.size}, endian={new_poller.endian}); "
-                                f"ignoring it."
-                            )
-                        else:
-                            current_device.pollerList.append(new_poller)
-                            current_poller = new_poller
-                elif "ref" in row[0].lower():
-                    if not current_device or not current_poller:
-                        self.logger.debug(
-                            f"No device/poller for reference {row[1] if len(row) > 1 else 'unknown'}."
-                        )
-                        continue
-                    ref = self._create_reference(row, current_device)
-                    if ref and self._validate_reference(ref, current_poller):
-                        if "r" in ref.rw.lower():
-                            current_poller.add_readable_reference(ref)
-                        if ref.name in current_device.references:
-                            self.logger.error(
-                                f"Duplicate reference name '{ref.name}' on device "
-                                f"{current_device.name}; aborting config file"
-                            )
-                            return []
-                        current_device.add_reference_mapping(ref)
-                        self.logger.debug(
-                            f"Add reference {ref.name} to device {current_device.name}"
-                        )
-            _validate_cross_device_config(device_list, self.logger)
-            return device_list
-        except Exception as e:
-            self.logger.error(f"Error parsing config: {e}")
+            devices = parse_config(csv_reader, self.config_file, self.logger)
+            _validate_cross_device_config(devices, self.logger)
+            return devices
+        except ConfigurationError as exc:
+            self.logger.error("%s", exc)
             return []
 
-    def _create_poller(self, row: list[str], current_device: Device) -> Poller | None:
-        fc = row[1].lower()
-        try:
-            start_address = int(row[2], 0)
-            size = int(row[3], 0)
-        except ValueError:
-            self.logger.error("Invalid start address or size for poller")
-            return None
-        endian = row[4]
-        function_code = self._get_function_code(fc)
-        if function_code is None:
-            return None
-        if not self._validate_poller_size(function_code, size):
-            return None
-        return Poller(current_device, function_code, start_address, size, endian)
-
-    def _get_function_code(self, fc: str) -> int | None:
-        fc_map = {
-            "coil": 1,
-            "discrete_input": 2,
-            "holding_register": 3,
-            "input_register": 4,
-        }
-        if fc in fc_map:
-            return fc_map[fc]
-        self.logger.warning(f"Unknown function code ({fc}) ignoring poller.")
-        return None
-
-    def _validate_poller_size(self, function_code: int, size: int) -> bool:
-        if size <= 0:
-            self.logger.error(
-                f"Poller size must be greater than 0: {size}. Ignoring poller."
-            )
-            return False
-        if function_code in (1, 2) and size > 2000:
-            self.logger.error(
-                f"Too many coils/discrete inputs (max. 2000): {size}. Ignoring poller."
-            )
-            return False
-        if function_code in (3, 4) and size > 123:
-            self.logger.error(
-                f"Too many registers (max. 123): {size}. Ignoring poller."
-            )
-            return False
-        return True
-
-    def _create_reference(
-        self, row: list[str], current_device: Device
-    ) -> Reference | None:
-        if len(row) < CONFIG_REF_COL_MIN:
-            self.logger.error("Invalid reference configuration")
-            return None
-        ref_name = row[1].replace(" ", "_")
-        try:
-            address = row[2]
-        except ValueError:
-            self.logger.error(f"Invalid address for reference {ref_name}")
-            return None
-        dtype = row[3].lower()
-        rw = row[4] or "r"
-        unit = row[5] if len(row) > 5 else None
-        try:
-            scale = float(row[6]) if len(row) > 6 else None
-        except ValueError:
-            scale = None
-        return Reference(current_device, ref_name, address, dtype, rw, unit, scale)
-
-    def _validate_reference(self, ref: Reference, current_poller: Poller) -> bool:
-        if current_poller.fc in (1, 2) and ref.bit is not None:
-            self.logger.warning(
-                f"Reference {ref.name}: address:bit syntax is only supported on "
-                f"holding_register/input_register pollers, ignoring it."
-            )
-            return False
-        for poller in current_poller.device.pollerList:
-            if ref in poller.readableReferences:
-                if poller is current_poller:
-                    self.logger.warning(
-                        f"Reference {ref.name} is already added, ignoring it."
-                    )
-                else:
-                    self.logger.warning(
-                        f"Reference {ref.name} duplicates address/dtype in another "
-                        f"poller on device {current_poller.device.name}; ignoring it."
-                    )
-                return False
-        if not ref.check_sanity(
-            current_poller.start_address, current_poller.size, current_poller.fc
-        ):
-            self.logger.warning(
-                f"Reference {ref.name} failed to pass sanity check, ignoring it."
-            )
-            return False
-        self._warn_if_read_only_poller_marked_writable(ref, current_poller)
-        return True
-
-    def _warn_if_read_only_poller_marked_writable(
-        self, ref: Reference, current_poller: Poller
-    ) -> None:
-        if current_poller.fc not in (2, 4) or "w" not in ref.rw:
-            return
-        object_type = "discrete_input" if current_poller.fc == 2 else "input_register"
-        self.logger.warning(
-            f"Reference {ref.name} is marked '{ref.rw}' on an {object_type} poller; "
-            "Modbus inputs are read-only and MQTT writes to this reference will be "
-            "rejected."
-        )
-
-    def _begin_poll_cycle(self) -> None:
+    def begin_poll_cycle(self) -> None:
         for dev in self.deviceList:
             dev.pollSuccess = False
+            for ref in dev.references.values():
+                ref.invalidate()
 
     def _maybe_disable_poller(self, dev: Device, poller: Poller) -> None:
         if self.autoremove and poller.failcounter >= 3:
             poller.disabled = True
+            if self.recover_after > 0:
+                poller.retry_at = time.monotonic() + self.recover_after
             self.logger.warning(
                 f"Disabled poller for device {dev.name} "
                 f"(fc={poller.fc}, start={poller.start_address}) "
                 f"after 3 consecutive failures"
             )
 
-    def _record_poll_failure(self) -> None:
-        for dev in self.deviceList:
-            for p in dev.pollerList:
-                if not p.disabled:
-                    p.update_statistics(False)
-                    self._maybe_disable_poller(dev, p)
-
     def on_poll_unavailable(self) -> None:
-        self._begin_poll_cycle()
-        self._record_poll_failure()
+        self.begin_poll_cycle()
 
     def poll(self) -> bool:
-        any_success = False
-        self._begin_poll_cycle()
+        all_success = True
+        attempted = False
+        self.begin_poll_cycle()
         for dev in self.deviceList:
             self.logger.debug(f"Polling device {dev.name} ...")
             for p in dev.pollerList:
+                if (
+                    p.disabled
+                    and p.retry_at is not None
+                    and time.monotonic() >= p.retry_at
+                ):
+                    p.disabled = False
+                    p.retry_at = None
+                    p.failcounter = 0
                 if not p.disabled:
                     try:
-                        if p.poll(self.modbus_client):
-                            any_success = True
+                        attempted = True
+                        if not p.poll(self.modbus_client):
+                            all_success = False
                     except (ModbusException, OSError):
                         p.update_statistics(False)
                         for ref in p.readableReferences:
@@ -405,11 +210,13 @@ class ModbusHandler:
                         raise
                     self._maybe_disable_poller(dev, p)
                     if on_threading_event():
-                        return any_success
+                        return attempted and all_success
                     delay_thread(timeout=self.interval)
+                else:
+                    all_success = False
         if not self.no_output:
             self.print_results()
-        return any_success
+        return attempted and all_success
 
     def has_device(self, device_name: str) -> bool:
         return any(d.name == device_name for d in self.deviceList)
@@ -429,6 +236,10 @@ class ModbusHandler:
             return
 
         dev.setCount += 1
+        self.last_write_results = {
+            name: {"status": "rejected", "error": "unknown_reference"}
+            for name in ref_values
+        }
         unknown_skips = 0
         writes: list[tuple[str, ModbusValue]] = []
         for ref_name, value in ref_values.items():
@@ -448,9 +259,79 @@ class ModbusHandler:
             dev.setErrors += 1
             return
 
+        self.last_write_results = {
+            name: {"status": "not_attempted"} for name in ref_values
+        }
+        rejected = False
+        ranges: list[tuple[int, int, int, int | None]] = []
+        for ref_name, value in writes:
+            try:
+                if self.read_only:
+                    raise ValueError("Gateway is read-only")
+                _, ref, poller = validate_write(self, device_name, ref_name, value)
+                start = (
+                    poller.start_address + (ref.address - poller.start_address) * 8
+                    if poller.fc == 1 and ref.dtype in ("bool8", "bool16")
+                    else ref.address
+                )
+                width = (
+                    (8 if ref.dtype == "bool8" else 16)
+                    if poller.fc == 1 and ref.dtype in ("bool8", "bool16")
+                    else ref.ref_width
+                )
+                for fc, left, right, bit in ranges:
+                    if (
+                        fc == poller.fc
+                        and start < right
+                        and left < start + width
+                        and not (
+                            ref.bit is not None and bit is not None and bit != ref.bit
+                        )
+                    ):
+                        raise ValueError("Overlapping writes in one command")
+                ranges.append((poller.fc, start, start + width, ref.bit))
+            except (ValueError, OverflowError) as exc:
+                rejected = True
+                self.last_write_results[ref_name] = {
+                    "status": "rejected",
+                    "error": str(exc),
+                }
+        for name in ref_values:
+            if name not in dev.references:
+                self.last_write_results[name] = {
+                    "status": "rejected",
+                    "error": "unknown_reference",
+                }
+        if rejected:
+            dev.setErrors += 1
+            dev.setUnknownRefs += unknown_skips
+            return
         ok_count = 0
         for i, (ref_name, value) in enumerate(writes):
-            if self.write_reference(device_name, ref_name, value):
+            if on_threading_event():
+                break
+            if (
+                self.command_expires_at is not None
+                and time.time() >= self.command_expires_at
+            ):
+                for name, _ in writes[i:]:
+                    self.last_write_results[name] = {
+                        "status": "not_attempted",
+                        "error": "command_expired",
+                    }
+                break
+            try:
+                ok = self.write_reference(device_name, ref_name, value)
+            except (ModbusException, OSError):
+                self.last_write_results[ref_name] = {
+                    "status": "unknown",
+                    "error": "transport_failure",
+                }
+                raise
+            self.last_write_results[ref_name] = {
+                "status": "confirmed" if ok else "failed"
+            }
+            if ok:
                 ok_count += 1
             if i < len(writes) - 1:
                 delay_thread(timeout=self.interval)
@@ -580,6 +461,15 @@ class ModbusHandler:
                 "poll_count": dev.pollCount,
                 "error_count": dev.errorCount,
                 "last_poll_success": dev.pollSuccess,
+                "references": {
+                    ref.name: {
+                        "quality": ref.quality,
+                        "last_success_at": ref.last_success_at,
+                        "last_attempt_at": ref.last_attempt_at,
+                    }
+                    for ref in dev.references.values()
+                },
+                "disabled_pollers": sum(p.disabled for p in dev.pollerList),
                 "get_count": dev.getCount,
                 "get_errors": dev.getErrors,
                 "get_success": dev.getSuccess,
@@ -589,7 +479,7 @@ class ModbusHandler:
                 "set_errors": dev.setErrors,
                 "set_success": dev.setSuccess,
                 "set_unknown_refs": dev.setUnknownRefs,
-                "config_source": self.config_file,
+                "config_source": safe_source(self.config_file),
             }
             topic = self.mqtt_diagnostics_topic_pattern.replace(
                 "{{device_name}}", dev.name
@@ -597,21 +487,10 @@ class ModbusHandler:
             self.mqtt_handler.publish(topic, json.dumps(payload), retain=retain)
 
     def export(self, file: str, timestamp: float | None = None) -> None:
-        data: dict[str, dict[str, ModbusValue]] = {}
-        for dev in self.deviceList:
-            dev_data = {}
-            for ref in dev.references.values():
-                if isinstance(ref.val, float) and not math.isfinite(ref.val):
-                    continue
-                dev_data[ref.name] = ref.val
-            if timestamp:
-                dev_data["timestamp"] = timestamp
-            data[dev.name] = dev_data
         try:
-            with open(file, "w") as f:
-                json.dump(data, f, indent=2)
-        except OSError as e:
-            self.logger.error(f"Error exporting data: {e}")
+            export_snapshot(file, self.deviceList, timestamp)
+        except (OSError, ValueError) as exc:
+            self.logger.error("Error exporting data: %s", exc)
 
     def get_device_list(self) -> list[Device]:
         return self.deviceList
@@ -638,10 +517,14 @@ def publish_global_diagnostics(
         "modbus_ok": modbus_ok,
         "devices_failing": count_devices_failing(modbus_handlers),
         "last_cycle_s": last_cycle_s,
+        "mqtt_dropped_messages": mqtt_handler.dropped_messages,
+        "mqtt_expired_messages": mqtt_handler.expired_messages,
+        "mqtt_publish_errors": mqtt_handler.publish_errors,
+        "mqtt_subscription_errors": mqtt_handler.subscription_errors,
         **(connection_diagnostics or {}),
     }
     mqtt_handler.publish(
-        MQTT_GLOBAL_DIAGNOSTICS_TOPIC,
+        mqtt_handler.status_topic.rsplit("/", 1)[0] + "/diagnostics",
         json.dumps(payload),
         retain=mqtt_handler.retain_data_publishes,
     )
@@ -651,7 +534,15 @@ def setup_modbus_handlers(
     args: Namespace, mqtt_handler: MqttHandler | None = None
 ) -> tuple[ModbusClient, list[ModbusHandler]]:
     modbus_handlers: list[ModbusHandler] = []
-    modbus_client = _create_modbus_client(args)
+    try:
+        modbus_client = (
+            ModbusTcpClient("localhost", retries=0)
+            if args.check_config
+            else _create_modbus_client(args)
+        )
+    except ValueError as exc:
+        raise ConfigurationError(str(exc)) from exc
+    names: set[str] = set()
     for config_file in args.config:
         modbus_handler = ModbusHandler(
             modbus_client,
@@ -667,8 +558,28 @@ def setup_modbus_handlers(
             autoremove=args.autoremove,
             csv_delimiter_code=args.csv_delimiter,
         )
-        if modbus_handler.load_config():
-            modbus_handlers.append(modbus_handler)
+        modbus_handler.recover_after = args.poller_recover_after
+        modbus_handler.bit_write_strategy = args.modbus_bit_write
+        modbus_handler.read_only = args.read_only
+        if not modbus_handler.load_config():
+            raise ConfigurationError(
+                f"Invalid configuration: {safe_source(config_file)}"
+            )
+        for device in modbus_handler.deviceList:
+            if device.name in names:
+                raise ConfigurationError(
+                    f"Duplicate device name across files: {device.name}"
+                )
+            if args.serial and device.devid > 247:
+                raise ConfigurationError("Serial device IDs must be 1..247")
+            names.add(device.name)
+            keys = [
+                _mqtt_payload_key(ref, args.mqtt_keys)
+                for ref in device.references.values()
+            ]
+            if len(keys) != len(set(keys)) or (args.timestamp and "timestamp" in keys):
+                raise ConfigurationError(f"MQTT payload key collision on {device.name}")
+        modbus_handlers.append(modbus_handler)
     return modbus_client, modbus_handlers
 
 
@@ -704,6 +615,7 @@ def _create_serial_client(
             parity=parity,
             stopbits=1,
             timeout=args.timeout,
+            retries=0,
             framer=framer,
         )
     return ModbusSerialClient(
@@ -713,6 +625,7 @@ def _create_serial_client(
         parity=parity,
         stopbits=1,
         timeout=args.timeout,
+        retries=0,
     )
 
 
@@ -722,9 +635,12 @@ def _create_tcp_client(args: Namespace, framer: FramerType | None) -> ModbusTcpC
             host=args.tcp,
             port=args.tcp_port,
             timeout=args.timeout,
+            retries=0,
             framer=framer,
         )
-    return ModbusTcpClient(host=args.tcp, port=args.tcp_port, timeout=args.timeout)
+    return ModbusTcpClient(
+        host=args.tcp, port=args.tcp_port, timeout=args.timeout, retries=0
+    )
 
 
 def _create_udp_client(args: Namespace, framer: FramerType | None) -> ModbusUdpClient:
@@ -733,9 +649,12 @@ def _create_udp_client(args: Namespace, framer: FramerType | None) -> ModbusUdpC
             host=args.udp,
             port=args.udp_port,
             timeout=args.timeout,
+            retries=0,
             framer=framer,
         )
-    return ModbusUdpClient(host=args.udp, port=args.udp_port, timeout=args.timeout)
+    return ModbusUdpClient(
+        host=args.udp, port=args.udp_port, timeout=args.timeout, retries=0
+    )
 
 
 def _get_parity(serial_parity: str) -> str:

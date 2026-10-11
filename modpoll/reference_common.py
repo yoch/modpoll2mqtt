@@ -31,7 +31,10 @@ class _HasPollerList(Protocol[_PollerT]):
     def pollerList(self) -> Sequence[_PollerT]: ...
 
 
-class _ReferenceWithSanity(Protocol):
+class _ReferenceWithSanity(Protocol[_PollerT]):
+    @property
+    def poller(self) -> _PollerT | None: ...
+
     def check_sanity(
         self, reference: int, size: int, fc: int | None = None
     ) -> bool: ...
@@ -59,9 +62,11 @@ def find_device(handler: _HasDeviceList[_DeviceT], device_name: str) -> _DeviceT
 
 
 def find_poller_for_ref(
-    dev: _HasPollerList[_PollerT], ref: _ReferenceWithSanity
+    dev: _HasPollerList[_PollerT], ref: _ReferenceWithSanity[_PollerT]
 ) -> _PollerT | None:
-    for poller in dev.pollerList:
-        if ref.check_sanity(poller.start_address, poller.size, poller.fc):
-            return poller
-    return None
+    if ref.poller is not None:
+        return ref.poller if any(p is ref.poller for p in dev.pollerList) else None
+    matches = [
+        p for p in dev.pollerList if ref.check_sanity(p.start_address, p.size, p.fc)
+    ]
+    return matches[0] if len(matches) == 1 else None
