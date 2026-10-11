@@ -1,7 +1,5 @@
 """ModbusHandler behavior: regressions, documented contracts, and config validation."""
 
-import csv
-import io
 import json
 from math import inf
 from unittest.mock import MagicMock
@@ -12,9 +10,12 @@ from tests.helpers.modbus import (
     FakeModbusResult,
     handler_with_device,
     log_messages,
+    parse_test_config,
 )
 
 from modpoll.arg_parser import get_parser
+from modpoll.configuration import ConfigurationError
+from modpoll.export import export_snapshot
 from modpoll.modbus_models import Device, Poller, Reference
 from modpoll.modbus_task import ModbusHandler
 from modpoll.mqtt_task import MqttHandler
@@ -105,7 +106,7 @@ def test_modbus_unavailable_clears_poll_success_and_skips_mqtt():
     )
     handler.deviceList = [device]
 
-    handler.on_poll_unavailable()
+    handler.begin_poll_cycle()
 
     assert device.pollSuccess is False
     handler.publish_data()
@@ -417,10 +418,9 @@ def test_coil_bool_reads_single_coil_at_modbus_address():
     assert ref.val is True
 
 
-def test_reference_scale_zero_is_silently_ignored():
-    ref = Reference(Device("dev", 1), "scaled", "0", "uint16", "r", None, 0)
-    ref.update_value(100)
-    assert ref.val == 100
+def test_reference_scale_zero_is_rejected():
+    with pytest.raises(ValueError, match="nonzero"):
+        Reference(Device("dev", 1), "scaled", "0", "uint16", "r", None, 0)
 
 
 def test_json_dumps_allows_nan_which_is_invalid_json():
@@ -497,7 +497,7 @@ def test_poller_handles_none_result():
     assert ref.val is None
 
 
-def test_autoremove_on_poll_unavailable():
+def test_autoremove_does_not_count_unattempted_polls():
     device = Device("dev", 1)
     poller = Poller(device, 3, 0, 1, "BE_BE")
     device.pollerList = [poller]
@@ -511,9 +511,10 @@ def test_autoremove_on_poll_unavailable():
     handler.deviceList = [device]
 
     for _ in range(3):
-        handler.on_poll_unavailable()
+        handler.begin_poll_cycle()
 
-    assert poller.disabled is True
+    assert poller.disabled is False
+    assert poller.failcounter == 0
 
 
 def test_export_omits_non_finite_floats(tmp_path):
@@ -524,10 +525,8 @@ def test_export_omits_non_finite_floats(tmp_path):
     bad.val = float("nan")
     device.references = {"good": good, "nan": bad}
 
-    handler = ModbusHandler(MagicMock(), "dummy.csv")
-    handler.deviceList = [device]
     export_file = tmp_path / "out.json"
-    handler.export(str(export_file))
+    export_snapshot(str(export_file), [device])
 
     data = json.loads(export_file.read_text())
     assert data == {"dev": {"good": 1.5}}
@@ -639,10 +638,8 @@ def test_export_json_shape(tmp_path):
     ref.val = 100
     device.references = {"holding_reg01": ref}
 
-    handler = ModbusHandler(MagicMock(), "dummy.csv")
-    handler.deviceList = [device]
     export_file = tmp_path / "out.json"
-    handler.export(str(export_file))
+    export_snapshot(str(export_file), [device])
 
     data = json.loads(export_file.read_text())
     assert data == {"modsim01": {"holding_reg01": 100}}
@@ -654,10 +651,8 @@ def test_export_includes_timestamp_when_provided(tmp_path):
     ref.val = 21
     device.references = {"temp": ref}
 
-    handler = ModbusHandler(MagicMock(), "dummy.csv")
-    handler.deviceList = [device]
     export_file = tmp_path / "out.json"
-    handler.export(str(export_file), timestamp=1710000000.0)
+    export_snapshot(str(export_file), [device], timestamp=1710000000.0)
 
     data = json.loads(export_file.read_text())
     assert data["dev"]["timestamp"] == 1710000000.0
@@ -677,25 +672,20 @@ def test_parse_config_accepts_hex_address():
             "ref,hex_ref,0x10,uint16,r",
         ]
     )
-    handler = ModbusHandler(MagicMock(), "unused")
-    devices = handler._parse_config(csv.reader(io.StringIO(config)))
+    devices = parse_test_config(config)
     assert len(devices) == 1
     assert devices[0].references["hex_ref"].address == 0x10
 
 
-def test_poller_rejects_register_poll_over_123(caplog):
+def test_poller_rejects_register_poll_over_125(caplog):
     config = "\n".join(
         [
             "device,dev,1",
-            "poll,holding_register,0,124,BE_BE",
+            "poll,holding_register,0,126,BE_BE",
         ]
     )
-    handler = ModbusHandler(MagicMock(), "unused")
-    with caplog.at_level("ERROR"):
-        devices = handler._parse_config(csv.reader(io.StringIO(config)))
-    assert len(devices) == 1
-    assert devices[0].pollerList == []
-    assert any("Too many registers" in m for m in log_messages(caplog, "ERROR"))
+    with pytest.raises(ConfigurationError, match="maximum count 125"):
+        parse_test_config(config)
 
 
 def test_poller_rejects_coil_poll_over_2000(caplog):
@@ -705,12 +695,8 @@ def test_poller_rejects_coil_poll_over_2000(caplog):
             "poll,coil,0,2001,BE_BE",
         ]
     )
-    handler = ModbusHandler(MagicMock(), "unused")
-    with caplog.at_level("ERROR"):
-        devices = handler._parse_config(csv.reader(io.StringIO(config)))
-    assert len(devices) == 1
-    assert devices[0].pollerList == []
-    assert any("Too many coils" in m for m in log_messages(caplog, "ERROR"))
+    with pytest.raises(ConfigurationError, match="maximum count 2000"):
+        parse_test_config(config)
 
 
 def test_warn_writable_mark_on_discrete_input(caplog):
@@ -721,9 +707,8 @@ def test_warn_writable_mark_on_discrete_input(caplog):
             "ref,di01,10000,bool,rw",
         ]
     )
-    handler = ModbusHandler(MagicMock(), "unused")
     with caplog.at_level("WARNING"):
-        devices = handler._parse_config(csv.reader(io.StringIO(config)))
+        devices = parse_test_config(config)
     assert len(devices) == 1
     assert "di01" in devices[0].references
     warnings = log_messages(caplog, "WARNING")
@@ -740,9 +725,8 @@ def test_warn_writable_mark_on_input_register(caplog):
             "ref,input_reg01,30000,uint16,w",
         ]
     )
-    handler = ModbusHandler(MagicMock(), "unused")
     with caplog.at_level("WARNING"):
-        devices = handler._parse_config(csv.reader(io.StringIO(config)))
+        devices = parse_test_config(config)
     assert len(devices) == 1
     assert "input_reg01" in devices[0].references
     warnings = log_messages(caplog, "WARNING")
@@ -760,9 +744,8 @@ def test_no_warn_read_only_mark_on_discrete_input(caplog):
             "ref,di01,10000,bool,r",
         ]
     )
-    handler = ModbusHandler(MagicMock(), "unused")
     with caplog.at_level("WARNING"):
-        handler._parse_config(csv.reader(io.StringIO(config)))
+        parse_test_config(config)
     assert not any("read-only" in m for m in log_messages(caplog, "WARNING"))
 
 
@@ -773,11 +756,8 @@ def test_invalid_endian_aborts_config_load(caplog):
             "poll,holding_register,0,1,NOT_A_VALID_ENDIAN",
         ]
     )
-    handler = ModbusHandler(MagicMock(), "unused")
-    with caplog.at_level("ERROR"):
-        devices = handler._parse_config(csv.reader(io.StringIO(config)))
-    assert devices == []
-    assert "Invalid endian" in caplog.text
+    with pytest.raises(ConfigurationError, match="Invalid endian"):
+        parse_test_config(config)
 
 
 def test_duplicate_device_name_aborts_config(caplog):
@@ -788,11 +768,8 @@ def test_duplicate_device_name_aborts_config(caplog):
             "device,same,2",
         ]
     )
-    handler = ModbusHandler(MagicMock(), "unused")
-    with caplog.at_level("ERROR"):
-        devices = handler._parse_config(csv.reader(io.StringIO(config)))
-    assert devices == []
-    assert "Duplicate device name 'same'" in caplog.text
+    with pytest.raises(ConfigurationError, match="Duplicate device name 'same'"):
+        parse_test_config(config)
 
 
 def test_shared_slave_id_logs_warning_and_loads(caplog):
@@ -800,12 +777,14 @@ def test_shared_slave_id_logs_warning_and_loads(caplog):
         [
             "device,devA,1",
             "poll,holding_register,0,1,BE_BE",
+            "ref,a,0,uint16,r",
             "device,devB,1",
+            "poll,holding_register,1,1,BE_BE",
+            "ref,b,1,uint16,r",
         ]
     )
-    handler = ModbusHandler(MagicMock(), "unused")
     with caplog.at_level("WARNING"):
-        devices = handler._parse_config(csv.reader(io.StringIO(config)))
+        devices = parse_test_config(config)
     assert len(devices) == 2
     assert {d.name for d in devices} == {"devA", "devB"}
     assert devices[0].devid == devices[1].devid == 1
@@ -827,9 +806,8 @@ def test_shared_slave_id_adjacent_ranges_no_overlap_warning(caplog):
             "ref,PID_EC,7,int16,rw",
         ]
     )
-    handler = ModbusHandler(MagicMock(), "unused")
     with caplog.at_level("WARNING"):
-        devices = handler._parse_config(csv.reader(io.StringIO(config)))
+        devices = parse_test_config(config)
     assert len(devices) == 2
     assert (
         "Modbus slave ID 1 shared by logical devices: cta_conf, cta_rest" in caplog.text
@@ -848,9 +826,8 @@ def test_overlapping_poller_ranges_warns(caplog):
             "ref,b,5,bool,r",
         ]
     )
-    handler = ModbusHandler(MagicMock(), "unused")
     with caplog.at_level("WARNING"):
-        devices = handler._parse_config(csv.reader(io.StringIO(config)))
+        devices = parse_test_config(config)
     assert len(devices) == 2
     assert "Overlapping Modbus poll ranges on slave ID 1 (fc=1)" in caplog.text
     assert "device 'devA' [0, 10)" in caplog.text
@@ -868,9 +845,8 @@ def test_duplicate_poller_skipped(caplog):
             "ref,second,1,uint16,r",
         ]
     )
-    handler = ModbusHandler(MagicMock(), "unused")
     with caplog.at_level("WARNING"):
-        devices = handler._parse_config(csv.reader(io.StringIO(config)))
+        devices = parse_test_config(config)
     assert len(devices) == 1
     assert len(devices[0].pollerList) == 1
     ref_names = {r.name for r in devices[0].pollerList[0].readableReferences}
@@ -888,14 +864,8 @@ def test_duplicate_ref_across_pollers_ignored(caplog):
             "ref,copy,40001,uint16,r",
         ]
     )
-    handler = ModbusHandler(MagicMock(), "unused")
-    with caplog.at_level("WARNING"):
-        devices = handler._parse_config(csv.reader(io.StringIO(config)))
-    assert len(devices) == 1
-    assert len(devices[0].pollerList) == 2
-    assert "temp" in devices[0].references
-    assert "copy" not in devices[0].references
-    assert "duplicates address/dtype in another poller" in caplog.text
+    with pytest.raises(ConfigurationError, match="outside its poller"):
+        parse_test_config(config)
 
 
 def test_poller_size_zero_ignored(caplog):
@@ -905,9 +875,5 @@ def test_poller_size_zero_ignored(caplog):
             "poll,holding_register,0,0,BE_BE",
         ]
     )
-    handler = ModbusHandler(MagicMock(), "unused")
-    with caplog.at_level("ERROR"):
-        devices = handler._parse_config(csv.reader(io.StringIO(config)))
-    assert len(devices) == 1
-    assert len(devices[0].pollerList) == 0
-    assert "Poller size must be greater than 0" in caplog.text
+    with pytest.raises(ConfigurationError, match="Invalid poll range"):
+        parse_test_config(config)

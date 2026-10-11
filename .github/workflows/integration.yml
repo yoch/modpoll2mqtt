@@ -1,0 +1,39 @@
+name: ci-integration
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        pymodbus: [minimum, latest]
+    env:
+      MODPOLL_REQUIRE_INTEGRATION: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-poetry
+      - name: Install local MQTT broker
+        run: sudo apt-get update && sudo apt-get install -y mosquitto
+      - name: Select supported pymodbus boundary
+        run: |
+          if [ "${{ matrix.pymodbus }}" = minimum ]; then
+            .venv/bin/python -m pip install 'pymodbus==3.10.0'
+          else
+            .venv/bin/python -m pip install --upgrade 'pymodbus>=3.10,<4'
+          fi
+      - name: Unit and local integration tests (skips are failures)
+        run: poetry run pytest
+      - name: Build and smoke-test installed wheel
+        run: make smoke-wheel

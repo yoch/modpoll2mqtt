@@ -15,7 +15,7 @@ Each non-empty row is one of three types:
 - **poll** — ``poll,<object_type>,<start>,<size>,<endian>``
 - **ref** — ``ref,<name>,<address>,<dtype>,<rw>,<unit>,<scale>`` (``<unit>`` and ``<scale>`` optional)
 
-- **device** — ``<name>`` is unique per file (used in MQTT topics). ``<slave_id>`` is the Modbus unit ID (1–254). Multiple devices may share the same slave ID when they are logical views of one physical slave; poll ranges must not overlap.
+- **device** — ``<name>`` is unique across all files (used in MQTT topics). ``<slave_id>`` is the Modbus unit ID (1–255 for TCP/UDP, 1–247 for serial; broadcast ID 0 is unsupported). Multiple devices may share the same slave ID when they are logical views of one physical slave; overlapping poll ranges are reported as warnings.
 - **poll** — ``<object_type>`` is ``coil``, ``discrete_input``, ``holding_register``, or ``input_register``. ``<start>`` and ``<size>`` define the address range. ``<endian>`` must be ``BE_BE``, ``LE_BE``, ``LE_LE``, or ``BE_LE``.
 - **ref** — ``<address>`` may be decimal or hexadecimal (``0x10``). For register bit reads, use ``<address>:<bit>`` (0–15) with ``dtype`` ``bool``. ``<rw>`` is ``r``, ``w``, or ``rw``. ``<unit>`` and ``<scale>`` are optional; scale multiplies read values and divides write values.
 
@@ -28,16 +28,29 @@ Poll size limits
 ^^^^^^^^^^^^^^^^
 
 - Coils and discrete inputs: maximum **2000** points per poll.
-- Holding and input registers: maximum **123** registers per poll.
+- Holding and input registers: maximum **125** registers per poll.
 
 Validation rules
 ^^^^^^^^^^^^^^^^
 
 - Duplicate **device** names or **reference** names on the same device abort config loading.
-- Duplicate pollers (same function code, start, size, endian on one device) are ignored with a warning.
+- Duplicate pollers (same function code, start, size, endian on one device) reuse the existing poller with a warning; reference aliases remain readable.
 - Overlapping poll ranges on the same slave ID and function code produce a warning.
-- References outside the poller range or with invalid endian/dtype are ignored with a warning.
+- Invalid rows, addresses, ranges, endian, dtype, permissions, or parent declarations abort all configuration loading with a source and line number. References bind to the poller immediately preceding them, including its function code and endian.
+- Addresses are literal zero-based protocol addresses, with no implicit conversion of vendor labels such as 40001.
+- Scale must be finite and nonzero. ``stringN`` reserves ``ceil(N/2)`` registers and accepts at most N UTF-8 bytes. Register ``bool16`` occupies one register.
+- Names cannot contain MQTT separators/wildcards/control characters. Grouped payload keys must be unique, including the reserved ``timestamp`` key when enabled.
 - References marked ``w`` or ``rw`` on ``discrete_input`` or ``input_register`` pollers log a warning at load time (Modbus inputs are read-only; MQTT writes are rejected).
+
+Validate every file offline before deployment:
+
+.. code-block:: shell
+
+    modpoll --check-config --config examples/modsim.csv examples/modsim2.csv
+
+Local and HTTP(S) sources are bounded to 2 MiB and read with UTF-8/BOM support;
+HTTP uses connect/read timeouts. A remote URL is still a network source in
+``--check-config`` mode. Use a local file for fully offline validation.
 
 Here is the annotated template:
 

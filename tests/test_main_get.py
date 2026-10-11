@@ -56,11 +56,28 @@ def test_main_loop_publishes_get_response(monkeypatch):
         def publish_data_message(self, topic, msg):
             published.append((topic, msg))
 
+        def start(self):
+            return self.connect()
+
+        def publish_response(self, topic, msg):
+            return self.publish_data_message(topic, msg)
+
+        def wait(self, timeout):
+            main.delay_thread(timeout)
+
+        def flush(self, timeout=None):
+            return True
+
+        status_topic = "modpoll/status"
+        publish_errors = 0
+
+        dropped_messages = expired_messages = subscription_errors = 0
+
     monkeypatch.setattr(main, "MqttHandler", FakeMqttHandler)
     monkeypatch.setattr(
         main,
         "setup_modbus_handlers",
-        lambda args, mqtt_handler: (master, [handler]),
+        lambda args, mqtt_handler=None: (master, [handler]),
     )
     monkeypatch.setattr(main, "delay_thread", lambda *a, **k: None)
     monkeypatch.setattr(
@@ -126,11 +143,28 @@ def test_main_loop_get_failure_publishes_empty_response(monkeypatch):
         def publish_data_message(self, topic, msg):
             published.append((topic, msg))
 
+        def start(self):
+            return self.connect()
+
+        def publish_response(self, topic, msg):
+            return self.publish_data_message(topic, msg)
+
+        def wait(self, timeout):
+            main.delay_thread(timeout)
+
+        def flush(self, timeout=None):
+            return True
+
+        status_topic = "modpoll/status"
+        publish_errors = 0
+
+        dropped_messages = expired_messages = subscription_errors = 0
+
     monkeypatch.setattr(main, "MqttHandler", FakeMqttHandler)
     monkeypatch.setattr(
         main,
         "setup_modbus_handlers",
-        lambda args, mqtt_handler: (master, [handler]),
+        lambda args, mqtt_handler=None: (master, [handler]),
     )
     monkeypatch.setattr(main, "delay_thread", lambda *a, **k: None)
     monkeypatch.setattr(
@@ -201,6 +235,22 @@ class _FakeMqttScript:
     def publish(self, topic, msg, retain=False):
         type(self).published_raw.append((topic, msg, retain))
 
+    def start(self):
+        return self.connect()
+
+    def publish_response(self, topic, msg):
+        return self.publish_data_message(topic, msg)
+
+    def wait(self, timeout):
+        main.delay_thread(timeout)
+
+    def flush(self, timeout=None):
+        return True
+
+    status_topic = "modpoll/status"
+    publish_errors = 0
+    dropped_messages = expired_messages = subscription_errors = 0
+
 
 class _ExplodingReadMaster(FakeModbusMaster):
     def read_holding_registers(self, address, *, count=1, device_id=1):
@@ -227,7 +277,7 @@ def _run_main_with_script(monkeypatch, master, handler, messages, extra_args=Non
     monkeypatch.setattr(
         main,
         "setup_modbus_handlers",
-        lambda args, mqtt_handler: (master, [handler]),
+        lambda args, mqtt_handler=None: (master, [handler]),
     )
     monkeypatch.setattr(main, "delay_thread", lambda *a, **k: None)
     argv = [
@@ -320,8 +370,8 @@ def test_main_connect_failure_marks_all_handlers_without_callback(monkeypatch):
     assert master.connect.call_count == 1
     assert master.close_count == 1
     assert device.pollSuccess is False
-    assert device.errorCount == 1
-    assert device.pollCount == 1
+    assert device.errorCount == 0
+    assert device.pollCount == 0
 
 
 def test_main_write_reuses_connection_after_poll(monkeypatch):
@@ -456,7 +506,7 @@ def test_global_modbus_ok_false_when_later_handler_hits_transport_error(monkeypa
     monkeypatch.setattr(
         main,
         "setup_modbus_handlers",
-        lambda args, mqtt_handler: (master, [ok_handler, failing_handler]),
+        lambda args, mqtt_handler=None: (master, [ok_handler, failing_handler]),
     )
     monkeypatch.setattr(main, "delay_thread", lambda *a, **k: None)
     monkeypatch.setattr(

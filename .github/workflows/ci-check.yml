@@ -30,7 +30,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    if: github.event_name != 'pull_request'
     steps:
       - name: Check out
         uses: actions/checkout@v4

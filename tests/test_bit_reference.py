@@ -1,8 +1,11 @@
-import csv
-from unittest.mock import MagicMock
+import logging
 
+import pytest
+from tests.helpers.modbus import parse_test_config
+
+from modpoll.configuration import ConfigurationError, read_config
 from modpoll.modbus_models import Device, Poller, Reference
-from modpoll.modbus_task import ModbusHandler
+from modpoll.modbus_task import CSV_DELIMITER_CODES
 
 
 class FakeResult:
@@ -147,7 +150,7 @@ def test_coil_bool_with_nonzero_poll_start():
     poller = Poller(device, 1, 14, 8, "BE_BE")
     ref = Reference(device, "coil17", "17", "bool", "r", None, None)
     poller.add_readable_reference(ref)
-    bits = [False, False, False, True]
+    bits = [False, False, False, True] + [False] * 4
 
     class FakeMaster:
         def read_coils(self, address, *, count=1, device_id=1):
@@ -252,8 +255,6 @@ def test_coil_bool_and_bool8_can_coexist_in_same_poll():
 
 
 def test_bit_syntax_rejected_on_coil_poller_during_config_load():
-    import io
-
     config = "\n".join(
         [
             "device,dev,1",
@@ -261,38 +262,28 @@ def test_bit_syntax_rejected_on_coil_poller_during_config_load():
             "ref,invalid,5:0,bool,r",
         ]
     )
-    handler = ModbusHandler(MagicMock(), "unused")
-    devices = handler._parse_config(csv.reader(io.StringIO(config)))
-    assert len(devices) == 1
-    assert len(devices[0].pollerList) == 1
-    assert len(devices[0].pollerList[0].readableReferences) == 0
-    assert len(devices[0].references) == 0
+    with pytest.raises(ConfigurationError):
+        parse_test_config(config)
 
 
-def test_tab_delimited_config_loads_with_tab_code():
-    import io
-
-    config = "\n".join(
-        [
-            "device\tdev\t1",
-            "poll\tholding_register\t0\t1\tBE_BE",
-            "ref\tv\t0\tuint16\tr",
-        ]
+def test_tab_delimited_config_loads_with_tab_code(tmp_path):
+    config_path = tmp_path / "tab.csv"
+    config_path.write_text(
+        "device\tdev\t1\npoll\tholding_register\t0\t1\tBE_BE\nref\tv\t0\tuint16\tr\n",
+        encoding="utf-8",
     )
-    handler = ModbusHandler(MagicMock(), "unused", csv_delimiter_code="tab")
-    devices = handler._parse_config(
-        csv.reader(io.StringIO(config), delimiter=handler.csv_delimiter)
+    devices = read_config(
+        str(config_path), CSV_DELIMITER_CODES["tab"], 1.0, logging.getLogger()
     )
     assert len(devices) == 1
     assert len(devices[0].pollerList) == 1
     assert "v" in devices[0].references
 
 
-def test_load_config_hints_csv_delimiter_on_misparsed_file(caplog, tmp_path):
+def test_load_config_hints_csv_delimiter_on_misparsed_file(tmp_path):
     config_path = tmp_path / "bad.csv"
     config_path.write_text("device\tdev\t1\n", encoding="utf-8")
-    handler = ModbusHandler(MagicMock(), str(config_path), csv_delimiter_code="comma")
-    with caplog.at_level("ERROR"):
-        assert handler.load_config() is False
-    assert "--csv-delimiter" in caplog.text
-    assert "comma, tab" in caplog.text
+    with pytest.raises(ConfigurationError, match="--csv-delimiter \\(comma, tab\\)"):
+        read_config(
+            str(config_path), CSV_DELIMITER_CODES["comma"], 1.0, logging.getLogger()
+        )

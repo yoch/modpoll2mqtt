@@ -20,7 +20,7 @@ Fork of [modpoll](https://github.com/gavinying/modpoll), using the latest pymodb
 - Local display of polled data (debug mode)
 - MQTT publishing of references (configurable topics)
 - MQTT writes by CSV reference name (`modpoll/<device>/set`)
-- Local CSV export of polled data
+- Atomic JSON export of all configured devices
 - Bit-level access on registers and coils
 
 ## Installation
@@ -80,7 +80,7 @@ Once connected to the broker, `modpoll` subscribes to `modpoll/+/set`. Publish t
 }
 ```
 
-Unknown reference names in the payload are skipped with a warning.
+Unknown reference names in legacy payloads are skipped with a warning. Known writes are validated together before bus I/O; results are returned on the request topic followed by `/response`. Responses are never retained. Never retain a command.
 
 `bool8` / `bool16` references require a JSON array of 8 or 16 booleans at write time. Single-coil `bool` references accept a scalar boolean.
 
@@ -98,7 +98,39 @@ Only `coil` and `holding_register` references can be written. `input_register` a
 - `bool8` / `bool16`: legacy grouped reads (group index, not a direct coil address).
 - On **holding_register** or **input_register**, use `bool` with `address:bit` (0–15), e.g. `40019:15,bool`.
 - `<endian>` must be `BE_BE`, `LE_BE`, `LE_LE`, or `BE_LE` only.
-- `--autoremove` disables a poller after 3 consecutive Modbus failures.
+- `--autoremove` disables a poller after 3 consecutive attempted failures; add `--poller-recover-after 60` to probe it again.
+- Addresses are passed literally as zero-based protocol addresses. A vendor label such as `40001` is not automatically converted to `0`.
+- All files are validated before starting; run `modpoll --check-config --config file.csv` to check without a Modbus transport.
+
+## Reliable commands and operation
+
+Use `--mqtt-namespace site/gateway1` to isolate the default data, command, diagnostic
+and retained presence topics for each gateway. Configure MQTT ACLs and use
+`--mqtt-use-tls` (TLS 1.2 minimum) with `--mqtt-pass-file /run/secrets/mqtt_password`.
+`--read-only` blocks all writes. `--mqtt-insecure` explicitly disables certificate
+verification and should only be used for controlled diagnostics.
+
+The versioned command topic is `modpoll/<device>/commands` (customize with
+`--mqtt-command-topic-pattern`). For example:
+
+```json
+{"version": 1, "request_id": "control-001", "operation": "set", "values": {"holding_reg01": 100}}
+```
+
+Optional `expires_at` is a UTC Unix timestamp. Versioned GET uses
+`"operation": "get", "references": ["holding_reg01"]`. The response includes the
+request ID and a result for each reference: `confirmed`, `rejected`, `failed`,
+`not_attempted`, or `unknown` when a write acknowledgement was lost. Repeating
+an identical request returns a cached response while its ID remains in the
+bounded process-local cache. This protection does not survive process restarts.
+An ID reused with different content is rejected. See the
+[operational and migration guide](docs/consolidation.rst) for limits and failure semantics.
+
+`--once` polls once, flushes MQTT publications, and exits with `0` on success,
+`1` on runtime/poll/publication failure, or `2` for invalid configuration/options.
+It does not execute commands. Invalid configurations previously skipped, numeric
+wraparound, fractional unscaled integer writes, and oversized UTF-8 strings now
+fail explicitly. See [CHANGELOG.md](CHANGELOG.md) for the complete migration list.
 
 ## Examples
 
@@ -109,8 +141,8 @@ modpoll --tcp 192.168.1.10 --config examples/modsim.csv
 # Modbus serial
 modpoll --serial /dev/ttyUSB0 --serial-baud 9600 --config contrib/eniwise/scpms6.csv
 
-# MQTT + CSV export
-modpoll --tcp 192.168.1.10 --mqtt-host localhost --export data.csv --config examples/modsim.csv
+# MQTT + JSON export
+modpoll --tcp 192.168.1.10 --mqtt-host localhost --export data.json --config examples/modsim.csv
 
 # Multiple config files
 modpoll --tcp 192.168.1.10 --config examples/modsim.csv examples/modsim2.csv

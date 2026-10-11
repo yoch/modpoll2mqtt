@@ -29,11 +29,11 @@ Commandline Usage
 
     modpoll --tcp 192.168.1.10 --config examples/modsim.csv --mqtt-host broker.emqx.io
 
-- Connect to Modbus TCP device and export data to local csv file
+- Connect to Modbus TCP device and export data to a local JSON file
 
   .. code-block:: shell
 
-    modpoll --tcp 192.168.1.10 --config examples/modsim.csv --export data.csv
+    modpoll --tcp 192.168.1.10 --config examples/modsim.csv --export data.json
 
 - Connect to Modbus UDP device
 
@@ -51,7 +51,7 @@ If columns are not split correctly (for example tab-separated files), use ``--cs
 Export
 ------
 
-``--export`` writes polled reference values to a JSON file keyed by device name, then by reference name. Use ``--timestamp`` to add a ``timestamp`` field to each device's export object and to grouped MQTT publish payloads.
+``--export`` atomically replaces a JSON snapshot containing all configuration files. A failure before replacement preserves the previous file; it is logged without stopping the gateway, and makes ``--once`` exit with status 1. It writes polled reference values to a JSON file keyed by device name, then by reference name. Use ``--timestamp`` to add a ``timestamp`` field to each device's export object and to grouped MQTT publish payloads.
 
 .. code-block:: shell
 
@@ -220,9 +220,9 @@ By default, all references for a device are published in one JSON object on the 
 Publish behavior
 ----------------
 
-- Data is not published for a device unless its latest poll cycle succeeded (``last_poll_success`` in diagnostics).
+- Fresh values are published when at least one reference succeeds in the current cycle. Failed references are cleared and omitted; reference diagnostics show their quality and last acquisition time.
 - References with no value (``null``) are omitted from grouped MQTT payloads.
-- Non-finite floats (``NaN``, ``Inf``) are omitted from MQTT publish and export.
+- Non-finite floats (``NaN``, ``Inf``) become unavailable and are omitted from MQTT payloads; unavailable export references are ``null``.
 
 MQTT write commands
 -------------------
@@ -243,7 +243,7 @@ Subscribe pattern (default): ``modpoll/+/set``. Publish to ``modpoll/{device}/se
 - Only ``coil`` and ``holding_register`` pollers are writable; ``discrete_input`` and ``input_register`` are read-only at the Modbus protocol level even when marked ``rw``.
 - ``bool`` on coils or registers (including ``address:bit``) expects a scalar boolean.
 - ``bool8`` / ``bool16`` expect a JSON array of 8 or 16 booleans.
-- ``stringNNN`` references expect a string value.
+- ``stringNNN`` references expect a string fitting within NNN UTF-8 bytes, without truncation.
 - Multiple references can be written in a single message.
 - Unknown reference keys are skipped with a warning; ``set_unknown_refs``, ``set_errors``, and ``set_success`` in device diagnostics track write attempts (see MQTT diagnostics).
 
@@ -271,3 +271,9 @@ Subscribe pattern (default): ``modpoll/+/get``. Publish to ``modpoll/{device}/ge
 **Breaking change (2.1.0+):** the ``ref``/``value`` object format is no longer supported; use a reference map instead.
 
 **Breaking change (2.0.0+):** the previous low-level format (``object_type``, ``address``, ``value``) is no longer supported.
+
+Consolidation and migration
+---------------------------
+
+See :doc:`consolidation` for versioned commands, freshness, retry policy,
+resource limits, TLS, read-only operation, exit codes, and migration from 2.2.1.

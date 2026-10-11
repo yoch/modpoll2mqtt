@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import math
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -19,7 +21,6 @@ MODBUS_BACKOFF_MAX = 60.0
 class TransactionResult:
     ok: bool
     value: object | None = None
-    skipped: bool = False
     callback_started: bool = False
     error: str | None = None
 
@@ -40,9 +41,19 @@ class ModbusConnectionManager:
         backoff_base: float = MODBUS_BACKOFF_BASE,
         backoff_max: float = MODBUS_BACKOFF_MAX,
         max_connection_age: float | None = None,
-        clock: Callable[[], float] = get_utc_time,
+        clock: Callable[[], float] = time.monotonic,
         logger: logging.Logger | None = None,
     ) -> None:
+        if (
+            not all(math.isfinite(v) for v in (backoff_base, backoff_max))
+            or not 0 <= backoff_base <= backoff_max
+        ):
+            raise ValueError("Invalid reconnect backoff")
+        if max_connection_age is not None and (
+            not math.isfinite(max_connection_age) or max_connection_age <= 0
+        ):
+            raise ValueError("Invalid maximum connection age")
+        self._backoff_delay = backoff_base
         self.client = client
         self.backoff_base = backoff_base
         self.backoff_max = backoff_max
@@ -52,8 +63,9 @@ class ModbusConnectionManager:
 
         self.state: str = self.DISCONNECTED
         self.connected_since: float | None = None
-        self.last_success_at: float | None = None
-        self.last_failure_at: float | None = None
+        self._connected_since_utc: float | None = None
+        self._last_success_utc: float | None = None
+        self._last_failure_utc: float | None = None
         self.last_error: str | None = None
         self.backoff_until: float | None = None
         self.consecutive_failures: int = 0
@@ -99,10 +111,12 @@ class ModbusConnectionManager:
 
         self.state = self.READY
         self.connected_since = now
-        self.last_success_at = now
+        self._connected_since_utc = get_utc_time()
+        self._last_success_utc = self._connected_since_utc
         self.last_error = None
         self.backoff_until = None
         self.consecutive_failures = 0
+        self._backoff_delay = self.backoff_base
         self._has_connected = True
         return True
 
@@ -112,7 +126,6 @@ class ModbusConnectionManager:
         if not self.ensure_connected():
             return TransactionResult(
                 ok=False,
-                skipped=True,
                 error=self.last_error or "modbus connection unavailable",
             )
 
@@ -130,18 +143,19 @@ class ModbusConnectionManager:
                 error=str(exc),
             )
 
-        now = self.clock()
         self.state = self.READY
-        self.last_success_at = now
+        self._last_success_utc = get_utc_time()
         self.last_error = None
         self.backoff_until = None
         self.consecutive_failures = 0
+        self._backoff_delay = self.backoff_base
         return TransactionResult(ok=True, value=value, callback_started=True)
 
     def close(self, reason: str = "shutdown") -> None:
         if not self.client:
             self.state = self.DISCONNECTED
             self.connected_since = None
+            self._connected_since_utc = None
             return
         self.state = self.CLOSING
         try:
@@ -150,18 +164,24 @@ class ModbusConnectionManager:
             self.logger.debug(f"Ignoring Modbus close error during {reason}: {exc}")
         finally:
             self.connected_since = None
+            self._connected_since_utc = None
             self.state = self.DISCONNECTED
 
     def diagnostics(self) -> ModbusConnectionDiagnostics:
+        offset = get_utc_time() - self.clock()
+
+        def utc(value: float | None) -> float | None:
+            return None if value is None else value + offset
+
         return {
             "modbus_connection_state": self.state,
             "modbus_connected": self.connected,
-            "modbus_connected_since": self.connected_since,
-            "modbus_last_success_at": self.last_success_at,
-            "modbus_last_failure_at": self.last_failure_at,
+            "modbus_connected_since": self._connected_since_utc,
+            "modbus_last_success_at": self._last_success_utc,
+            "modbus_last_failure_at": self._last_failure_utc,
             "modbus_last_error": self.last_error,
             "modbus_consecutive_failures": self.consecutive_failures,
-            "modbus_backoff_until": self.backoff_until,
+            "modbus_backoff_until": utc(self.backoff_until),
             "modbus_connect_count": self.connect_count,
             "modbus_reconnect_count": self.reconnect_count,
             "modbus_transaction_failure_count": self.transaction_failure_count,
@@ -169,13 +189,11 @@ class ModbusConnectionManager:
 
     def _record_failure(self, error: str, now: float) -> None:
         self.state = self.BACKOFF
-        self.last_failure_at = now
+        self._last_failure_utc = get_utc_time()
         self.last_error = error
         self.consecutive_failures += 1
-        delay = min(
-            self.backoff_base * 2 ** (self.consecutive_failures - 1),
-            self.backoff_max,
-        )
+        delay = min(self._backoff_delay, self.backoff_max)
+        self._backoff_delay = min(delay * 2, self.backoff_max)
         self.backoff_until = now + delay
 
     def _connection_expired(self, now: float) -> bool:

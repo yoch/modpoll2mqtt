@@ -15,6 +15,7 @@ It polls Modbus devices (RTU, TCP, UDP) using CSV configuration files, publishes
     quickstart
     usage
     configure
+    consolidation
     changelog
 
 Indices and tables
