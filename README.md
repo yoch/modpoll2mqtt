@@ -1,12 +1,13 @@
 # modpoll2mqtt — Modbus to MQTT Gateway
 
+[![PyPI](https://img.shields.io/pypi/v/modpoll2mqtt)](https://pypi.org/project/modpoll2mqtt/)
 [![Release](https://img.shields.io/github/v/release/yoch/modpoll2mqtt?label=release)](https://github.com/yoch/modpoll2mqtt/releases/latest)
 [![License](https://img.shields.io/pypi/l/modpoll2mqtt)](https://github.com/yoch/modpoll2mqtt/blob/main/LICENSE)
 [![checks](https://img.shields.io/github/actions/workflow/status/yoch/modpoll2mqtt/ci-check.yml?branch=main&label=checks)](https://github.com/yoch/modpoll2mqtt/actions/workflows/ci-check.yml?query=branch%3Amain)
 [![tests](https://img.shields.io/github/actions/workflow/status/yoch/modpoll2mqtt/ci-test.yml?branch=main&label=tests)](https://github.com/yoch/modpoll2mqtt/actions/workflows/ci-test.yml?query=branch%3Amain)
 [![Downloads](https://img.shields.io/pepy/dt/modpoll2mqtt)](https://pepy.tech/projects/modpoll2mqtt)
 
-> Documentation: [yoch.github.io/modpoll2mqtt](https://yoch.github.io/modpoll2mqtt)
+> Documentation: [yoch.github.io/modpoll2mqtt](https://yoch.github.io/modpoll2mqtt) · PyPI: [pypi.org/project/modpoll2mqtt](https://pypi.org/project/modpoll2mqtt/)
 
 **modpoll2mqtt** is a command-line Modbus-to-MQTT gateway. It polls Modbus devices (RTU, TCP, UDP) using CSV configuration files, publishes values to an MQTT broker, and accepts write commands by CSV reference name.
 
