@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Features
+
+* add `--mqtt-on-change` to publish data only when MQTT-formatted values change, with per-reference `--mqtt-single` updates and cache invalidation after reconnects, publish errors, and device recovery
+
 ## [2.3.1](https://github.com/yoch/modpoll2mqtt/compare/v2.3.0...v2.3.1) (2026-10-11)
 
 ### Fixes

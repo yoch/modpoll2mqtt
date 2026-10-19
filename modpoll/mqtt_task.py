@@ -91,6 +91,9 @@ class MqttHandler:
         )
         self._connected_event = Event()
         self._connect_rc: int | None = None
+        # Bumped on every successful CONNACK so data publishers can detect
+        # reconnections they did not observe as a status transition.
+        self._connection_generation = 0
         self._closed = False
         self.logger = logging.getLogger(__name__)
 
@@ -113,6 +116,7 @@ class MqttHandler:
             return
 
         self.logger.debug("Connected to MQTT broker.")
+        self._connection_generation += 1
         if flags.session_present:
             self.logger.info("MQTT session present, reusing existing session.")
         else:
@@ -233,6 +237,8 @@ class MqttHandler:
             self.logger.info("Disconnected.")
         else:
             self.logger.warning(f"Disconnected with error, reason_code={reason_code}.")
+        # No generation bump here: the next successful CONNACK invalidates
+        # publisher caches, and nothing can be published while disconnected.
 
     def _on_log(self, client: MQTTClient, userdata: Any, level: int, buf: str) -> None:
         self.logger.debug(f"{level} | {buf}")
@@ -487,6 +493,11 @@ class MqttHandler:
 
     def is_connected(self) -> bool:
         return self.mqtt_client is not None and self.mqtt_client.is_connected()
+
+    @property
+    def connection_generation(self) -> int:
+        """Count of successful MQTT connections, for publisher cache invalidation."""
+        return self._connection_generation
 
     def close(self) -> None:
         if self._closed:

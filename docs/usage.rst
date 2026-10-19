@@ -217,6 +217,22 @@ MQTT single publish
 
 By default, all references for a device are published in one JSON object on the data topic. With ``--mqtt-single``, each reference is published on its own topic under the publish pattern, e.g. ``modpoll/{device}/data/{ref_name}``. List values (``bool8`` / ``bool16``) are split into indexed sub-topics (``.../{ref_name}/0``, ``.../1``, …).
 
+MQTT publish on change
+----------------------
+
+By default, every poll cycle publishes the current values, even when they are identical to the previous cycle. With ``--mqtt-on-change``, modpoll remembers the last successfully published payload per device and only publishes when a value changes:
+
+.. code-block:: shell
+
+    modpoll --tcp 192.168.1.10 --mqtt-host localhost --mqtt-on-change --mqtt-qos 1 --mqtt-retain --config examples/modsim.csv
+
+- The first successful poll for each device is always published.
+- Values are compared after MQTT formatting: floats use 3 decimals; unavailable (``null``) and non-finite values are omitted.
+- A changed ``timestamp`` alone does not trigger a publication; ``--timestamp`` only refreshes when data also changes.
+- With ``--mqtt-single``, only the changed references are published.
+- The cache is invalidated, and the full payload republished, after an MQTT reconnect, after a publish error, and when a device recovers from a poll failure, so recovery is visible even if values are unchanged.
+- Delivery remains best-effort at QoS 0: a publication silently lost between the gateway and the broker cannot be detected. Use ``--mqtt-qos 1`` when missed changes matter, and ``--mqtt-retain`` so consumers that connect later still receive unchanged values.
+
 Publish behavior
 ----------------
 

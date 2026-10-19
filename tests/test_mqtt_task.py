@@ -1,4 +1,5 @@
 import time
+from types import SimpleNamespace
 
 import pytest
 from paho.mqtt.client import ConnectFlags
@@ -18,6 +19,43 @@ def _signal_connect(handler, rc=0):
         ReasonCode(PacketTypes.CONNACK, identifier=rc),
         None,
     )
+
+
+def test_connection_generation_counts_successful_connects():
+    handler = MqttHandler(
+        name="test_mqtt",
+        host="broker.emqx.io",
+        port=1883,
+        user=None,
+        password=None,
+        clientid="test_client_generation",
+        qos=0,
+    )
+    assert handler.connection_generation == 0
+
+    def signal_connect(rc):
+        handler._on_connect(
+            handler.mqtt_client,
+            None,
+            SimpleNamespace(session_present=False),
+            SimpleNamespace(value=rc),
+            None,
+        )
+
+    signal_connect(rc=1)
+    assert handler.connection_generation == 0
+
+    signal_connect(rc=0)
+    assert handler.connection_generation == 1
+
+    # A disconnect alone does not invalidate: the next CONNACK does.
+    handler._on_disconnect(
+        handler.mqtt_client, None, None, SimpleNamespace(value=7), None
+    )
+    assert handler.connection_generation == 1
+
+    signal_connect(rc=0)
+    assert handler.connection_generation == 2
 
 
 def test_mqtt_task_setup():

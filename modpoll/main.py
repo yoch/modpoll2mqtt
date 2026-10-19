@@ -270,6 +270,17 @@ def app(name: str = "modpoll") -> None:
                 raise RuntimeError("MQTT setup failed")
             for handler in handlers:
                 handler.mqtt_handler = mqtt
+            if args.mqtt_on_change and args.mqtt_qos == 0:
+                logger.warning(
+                    "--mqtt-on-change with QoS 0: lost publications cannot be "
+                    "detected; use --mqtt-qos 1 so unchanged values are re-sent "
+                    "until acknowledged."
+                )
+            if args.mqtt_on_change and not args.mqtt_retain:
+                logger.info(
+                    "--mqtt-on-change without --mqtt-retain: consumers that "
+                    "connect later only receive values that change afterwards."
+                )
         delay_thread(args.delay)
         next_poll = time.monotonic()
         next_diag = next_poll
