@@ -1,6 +1,19 @@
 Changelog
 =========
 
+`2.4.1 <https://github.com/yoch/modpoll2mqtt/compare/v2.4.0...v2.4.1>`__ (2026-10-20)
+-------------------------------------------------------------------------------------
+
+Fixes
+~~~~~
+
+-  restore publication of every reference in ``--mqtt-single`` mode when
+   two ``--mqtt-keys`` labels collide (e.g. a reference name containing
+   ``|`` matching another reference’s name/unit); 2.4.0 could silently
+   omit one topic
+
+.. _section-1:
+
 `2.4.0 <https://github.com/yoch/modpoll2mqtt/compare/v2.3.1...v2.4.0>`__ (2026-10-20)
 -------------------------------------------------------------------------------------
 
@@ -11,10 +24,12 @@ Features
    values change, with per-reference ``--mqtt-single`` updates and cache
    invalidation after reconnects, publish errors, and device recovery
 
-.. _section-1:
+.. _section-2:
 
 `2.3.1 <https://github.com/yoch/modpoll2mqtt/compare/v2.3.0...v2.3.1>`__ (2026-10-11)
 -------------------------------------------------------------------------------------
+
+.. _fixes-1:
 
 Fixes
 ~~~~~
@@ -25,7 +40,7 @@ Fixes
    pymodbus 3.16.0 is excluded. Serial/RTU users install
    ``modpoll2mqtt[serial]``, as before 2.3.0
 
-.. _section-2:
+.. _section-3:
 
 `2.3.0 <https://github.com/yoch/modpoll2mqtt/compare/v2.2.1...v2.3.0>`__ (2026-10-11)
 -------------------------------------------------------------------------------------
@@ -53,7 +68,7 @@ Features
 -  expose per-reference quality/acquisition times and MQTT
    rejection/publication/subscription counters in diagnostics
 
-.. _fixes-1:
+.. _fixes-2:
 
 Fixes
 ~~~~~
@@ -141,7 +156,7 @@ Tests
 
 -  import device models from ``modpoll.modbus_models`` in unit tests
 
-.. _section-3:
+.. _section-4:
 
 `2.2.0 <https://github.com/yoch/modpoll2mqtt/compare/v2.1.2...v2.2.0>`__ (2026-06-16)
 -------------------------------------------------------------------------------------
@@ -208,7 +223,7 @@ Tests
    diagnostic counters
 -  migrate Modbus lifecycle tests to ``ModbusConnectionManager``
 
-.. _section-4:
+.. _section-5:
 
 `2.1.2 <https://github.com/yoch/modpoll2mqtt/compare/v2.1.1...v2.1.2>`__ (2026-06-15)
 -------------------------------------------------------------------------------------
@@ -245,7 +260,7 @@ Tests
 -  consolidate handler regression/contract tests; share
    ``FakeModbusMaster`` in ``tests/helpers/modbus.py``
 
-.. _section-5:
+.. _section-6:
 
 `2.1.1 <https://github.com/yoch/modpoll2mqtt/compare/v2.1.0...v2.1.1>`__ (2026-06-11)
 -------------------------------------------------------------------------------------
@@ -276,7 +291,7 @@ Internal
 -  centralize MQTT data publish policy (QoS and retain) in
    ``MqttHandler.publish_data_message``
 
-.. _section-6:
+.. _section-7:
 
 `2.1.0 <https://github.com/yoch/modpoll2mqtt/compare/v2.0.0...v2.1.0>`__ (2026-06-10)
 -------------------------------------------------------------------------------------
@@ -302,7 +317,7 @@ BREAKING CHANGES
 -  MQTT write payload must be a reference map (``{"ref": val}``);
    ``ref``/``value`` object format removed
 
-.. _section-7:
+.. _section-8:
 
 `2.0.0 <https://github.com/yoch/modpoll2mqtt/compare/v1.6.0...v2.0.0>`__ (2026-06-10)
 -------------------------------------------------------------------------------------
