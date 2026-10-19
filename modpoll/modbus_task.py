@@ -367,7 +367,10 @@ class ModbusHandler:
                 )
                 continue
 
-            # payload key -> (reference, MQTT-formatted value)
+            # In single mode the published topic and cache entry are keyed by
+            # the reference name (unique per device). The formatted payload key
+            # can collide when a name or unit contains the "|" separator, which
+            # must not merge two distinct reference topics.
             values: dict[str, tuple[Reference, ModbusValue]] = {}
             for ref in dev.references.values():
                 if ref.val is None:
@@ -375,7 +378,12 @@ class ModbusHandler:
                 ref_val = format_mqtt_scalar(ref.val)
                 if ref_val is None:
                     continue
-                values[_mqtt_payload_key(ref, self.mqtt_keys)] = (ref, ref_val)
+                key = (
+                    ref.name
+                    if self.mqtt_single_publish
+                    else _mqtt_payload_key(ref, self.mqtt_keys)
+                )
+                values[key] = (ref, ref_val)
 
             if not values:
                 continue

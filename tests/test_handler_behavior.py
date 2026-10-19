@@ -560,6 +560,36 @@ def test_mqtt_single_publishes_per_reference_topics():
     assert published["modpoll/dev/data/flags/7"] == "false"
 
 
+def test_mqtt_single_does_not_merge_references_with_colliding_keys():
+    """A '|' in a name or unit must not merge two reference topics."""
+    device = Device("dev", 1)
+    device.pollSuccess = True
+    first = Reference(device, "a|b", "0", "uint16", "r", None, None)
+    first.val = 1
+    second = Reference(device, "a", "1", "uint16", "r", "b", None)
+    second.val = 2
+    device.references = {"a|b": first, "a": second}
+
+    mqtt = MagicMock()
+    handler = ModbusHandler(
+        MagicMock(),
+        "dummy.csv",
+        mqtt_handler=mqtt,
+        mqtt_publish_topic_pattern="modpoll/{{device_name}}/data",
+        mqtt_single_publish=True,
+    )
+    handler.deviceList = [device]
+    handler.publish_data()
+
+    published = {
+        call[0][0]: call[0][1] for call in mqtt.publish_data_message.call_args_list
+    }
+    assert published == {
+        "modpoll/dev/data/a|b": "1",
+        "modpoll/dev/data/a": "2",
+    }
+
+
 def test_publish_data_omits_non_finite_floats():
     device = Device("dev", 1)
     device.pollSuccess = True

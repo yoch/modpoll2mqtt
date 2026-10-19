@@ -111,6 +111,43 @@ def test_on_change_compares_mqtt_rounded_floats():
     assert len(_published(mqtt)) == 1
 
 
+def test_on_change_single_keeps_colliding_mqtt_keys_independent():
+    device = Device("dev", 1)
+    device.pollSuccess = True
+    first = Reference(device, "a|b", "0", "uint16", "r", None, None)
+    first.val = 1
+    second = Reference(device, "a", "1", "uint16", "r", "b", None)
+    second.val = 1
+    device.references = {"a|b": first, "a": second}
+
+    mqtt = _mqtt()
+    handler = ModbusHandler(
+        MagicMock(),
+        "dummy.csv",
+        mqtt_handler=mqtt,
+        mqtt_publish_topic_pattern="modpoll/{{device_name}}/data",
+        mqtt_single_publish=True,
+        mqtt_keys="name-with-unit",
+        mqtt_on_change=True,
+    )
+    handler.deviceList = [device]
+
+    handler.publish_data()
+    assert _published(mqtt) == [
+        ("modpoll/dev/data/a|b", "1"),
+        ("modpoll/dev/data/a", "1"),
+    ]
+
+    # Changing the second reference must not be hidden by the first one's
+    # cached value: the two topics have distinct cache entries.
+    second.val = 2
+    handler.publish_data()
+    assert _published(mqtt)[-1] == ("modpoll/dev/data/a", "2")
+
+    handler.publish_data()
+    assert len(_published(mqtt)) == 3
+
+
 def test_on_change_disabled_publishes_every_cycle():
     mqtt = _mqtt()
     handler = _handler(mqtt, on_change=False)

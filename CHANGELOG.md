@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixes
+
+* restore publication of every reference in `--mqtt-single` mode when two `--mqtt-keys` labels collide (e.g. a reference name containing `|` matching another reference's name/unit); 2.4.0 could silently omit one topic
+
 ## [2.4.0](https://github.com/yoch/modpoll2mqtt/compare/v2.3.1...v2.4.0) (2026-10-20)
 
 ### Features
