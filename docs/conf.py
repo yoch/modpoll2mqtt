@@ -20,6 +20,7 @@ version = release = _match.group(1) if _match else "0.0.0"
 extensions = [
     "sphinx.ext.githubpages",
     "sphinxarg.ext",
+    "sphinx_sitemap",
 ]
 
 templates_path = ["_templates"]
@@ -27,3 +28,19 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["assets"]
+html_title = "modpoll2mqtt – Modbus (RTU/TCP/UDP) to MQTT gateway"
+
+# Canonical URL of the published site: emits <link rel="canonical"> and is the
+# base for sitemap.xml (sphinx-sitemap).
+html_baseurl = "https://yoch.github.io/modpoll2mqtt/"
+sitemap_url_scheme = "{link}"
+sitemap_excludes = ["search.html", "genindex.html"]
+
+# "Edit on GitHub" link in the sphinx_rtd_theme header.
+html_context = {
+    "display_github": True,
+    "github_user": "yoch",
+    "github_repo": "modpoll2mqtt",
+    "github_version": "main",
+    "conf_py_path": "/docs/",
+}
