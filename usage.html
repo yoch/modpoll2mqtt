@@ -6,14 +6,15 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Basic Usage &mdash; modpoll2mqtt 2.3.1 documentation</title>
+  <title>Basic Usage &mdash; modpoll2mqtt – Modbus (RTU/TCP/UDP) to MQTT gateway</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
 
   
+    <link rel="canonical" href="https://yoch.github.io/modpoll2mqtt/usage.html" />
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=67b02a41"></script>
+      <script src="_static/documentation_options.js?v=4d935f96"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -64,6 +65,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#mqtt-diagnostics">MQTT diagnostics</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#mqtt-payload-keys">MQTT payload keys</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#mqtt-single-publish">MQTT single publish</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mqtt-publish-on-change">MQTT publish on change</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#publish-behavior">Publish behavior</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#mqtt-write-commands">MQTT write commands</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#mqtt-on-demand-read-get">MQTT on-demand read (get)</a></li>
@@ -91,7 +93,7 @@
       <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
       <li class="breadcrumb-item active">Basic Usage</li>
       <li class="wy-breadcrumbs-aside">
-            <a href="_sources/usage.rst.txt" rel="nofollow"> View page source</a>
+              <a href="https://github.com/yoch/modpoll2mqtt/blob/main/docs/usage.rst" class="fa fa-github"> Edit on GitHub</a>
       </li>
   </ul>
   <hr/>
@@ -101,7 +103,7 @@
              
   <section id="basic-usage">
 <h1>Basic Usage<a class="headerlink" href="#basic-usage" title="Link to this heading"></a></h1>
-<p><p>modpoll2mqtt v2.3.1 - Modbus to MQTT gateway</p>
+<p><p>modpoll2mqtt v2.4.0 - Modbus to MQTT gateway</p>
 </p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">usage</span><span class="p">:</span> <span class="n">modpoll</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">v</span><span class="p">]</span> <span class="o">-</span><span class="n">f</span> <span class="n">CONFIG</span> <span class="p">[</span><span class="n">CONFIG</span> <span class="o">...</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">csv</span><span class="o">-</span><span class="n">delimiter</span> <span class="p">{</span><span class="n">comma</span><span class="p">,</span><span class="n">tab</span><span class="p">}]</span>
                <span class="p">[</span><span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">output</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">r</span> <span class="n">RATE</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">interval</span> <span class="n">INTERVAL</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">tcp</span> <span class="n">TCP</span><span class="p">]</span>
@@ -122,12 +124,13 @@
                <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">user</span> <span class="n">MQTT_USER</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="k">pass</span> <span class="n">MQTT_PASS</span><span class="p">]</span>
                <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">use</span><span class="o">-</span><span class="n">tls</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">insecure</span><span class="p">]</span>
                <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">cacerts</span> <span class="n">MQTT_CACERTS</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">tls</span><span class="o">-</span><span class="n">version</span> <span class="p">{</span><span class="n">tlsv1</span><span class="mf">.2</span><span class="p">}]</span>
-               <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">single</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">keys</span> <span class="p">{</span><span class="n">name</span><span class="o">-</span><span class="k">with</span><span class="o">-</span><span class="n">unit</span><span class="p">,</span><span class="n">name</span><span class="o">-</span><span class="n">only</span><span class="p">}]</span>
-               <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">retain</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">diagnostics</span><span class="o">-</span><span class="n">rate</span> <span class="n">DIAGNOSTICS_RATE</span><span class="p">]</span>
-               <span class="p">[</span><span class="o">--</span><span class="n">autoremove</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">loglevel</span> <span class="p">{</span><span class="n">DEBUG</span><span class="p">,</span><span class="n">INFO</span><span class="p">,</span><span class="n">WARNING</span><span class="p">,</span><span class="n">ERROR</span><span class="p">,</span><span class="n">CRITICAL</span><span class="p">}]</span>
-               <span class="p">[</span><span class="o">--</span><span class="n">timestamp</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">delay</span> <span class="n">DELAY</span><span class="p">]</span>
-               <span class="p">[</span><span class="o">--</span><span class="n">framer</span> <span class="p">{</span><span class="n">default</span><span class="p">,</span><span class="n">ascii</span><span class="p">,</span><span class="n">rtu</span><span class="p">,</span><span class="n">socket</span><span class="p">}]</span> <span class="p">[</span><span class="o">--</span><span class="n">check</span><span class="o">-</span><span class="n">config</span><span class="p">]</span>
-               <span class="p">[</span><span class="o">--</span><span class="n">read</span><span class="o">-</span><span class="n">only</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">poller</span><span class="o">-</span><span class="n">recover</span><span class="o">-</span><span class="n">after</span> <span class="n">POLLER_RECOVER_AFTER</span><span class="p">]</span>
+               <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">single</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">on</span><span class="o">-</span><span class="n">change</span><span class="p">]</span>
+               <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">keys</span> <span class="p">{</span><span class="n">name</span><span class="o">-</span><span class="k">with</span><span class="o">-</span><span class="n">unit</span><span class="p">,</span><span class="n">name</span><span class="o">-</span><span class="n">only</span><span class="p">}]</span> <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">retain</span><span class="p">]</span>
+               <span class="p">[</span><span class="o">--</span><span class="n">diagnostics</span><span class="o">-</span><span class="n">rate</span> <span class="n">DIAGNOSTICS_RATE</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">autoremove</span><span class="p">]</span>
+               <span class="p">[</span><span class="o">--</span><span class="n">loglevel</span> <span class="p">{</span><span class="n">DEBUG</span><span class="p">,</span><span class="n">INFO</span><span class="p">,</span><span class="n">WARNING</span><span class="p">,</span><span class="n">ERROR</span><span class="p">,</span><span class="n">CRITICAL</span><span class="p">}]</span> <span class="p">[</span><span class="o">--</span><span class="n">timestamp</span><span class="p">]</span>
+               <span class="p">[</span><span class="o">--</span><span class="n">delay</span> <span class="n">DELAY</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">framer</span> <span class="p">{</span><span class="n">default</span><span class="p">,</span><span class="n">ascii</span><span class="p">,</span><span class="n">rtu</span><span class="p">,</span><span class="n">socket</span><span class="p">}]</span>
+               <span class="p">[</span><span class="o">--</span><span class="n">check</span><span class="o">-</span><span class="n">config</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">read</span><span class="o">-</span><span class="n">only</span><span class="p">]</span>
+               <span class="p">[</span><span class="o">--</span><span class="n">poller</span><span class="o">-</span><span class="n">recover</span><span class="o">-</span><span class="n">after</span> <span class="n">POLLER_RECOVER_AFTER</span><span class="p">]</span>
                <span class="p">[</span><span class="o">--</span><span class="n">modbus</span><span class="o">-</span><span class="n">bit</span><span class="o">-</span><span class="n">write</span> <span class="p">{</span><span class="n">read</span><span class="o">-</span><span class="n">modify</span><span class="o">-</span><span class="n">write</span><span class="p">,</span><span class="n">mask</span><span class="p">}]</span>
                <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">namespace</span> <span class="n">MQTT_NAMESPACE</span><span class="p">]</span>
                <span class="p">[</span><span class="o">--</span><span class="n">mqtt</span><span class="o">-</span><span class="n">command</span><span class="o">-</span><span class="n">topic</span><span class="o">-</span><span class="n">pattern</span> <span class="n">MQTT_COMMAND_TOPIC_PATTERN</span><span class="p">]</span>
@@ -277,6 +280,10 @@
 </dd>
 <dt><kbd>--mqtt-single</kbd></dt>
 <dd><p>Publish each value in a single topic. If not specified, groups all values in one topic.</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+<dt><kbd>--mqtt-on-change</kbd></dt>
+<dd><p>Publish data only when the MQTT-formatted values change. Recommended with –mqtt-qos 1 and –mqtt-retain.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
 </dd>
 <dt><kbd>--mqtt-keys</kbd></dt>
@@ -559,6 +566,21 @@
 <section id="mqtt-single-publish">
 <h2>MQTT single publish<a class="headerlink" href="#mqtt-single-publish" title="Link to this heading"></a></h2>
 <p>By default, all references for a device are published in one JSON object on the data topic. With <code class="docutils literal notranslate"><span class="pre">--mqtt-single</span></code>, each reference is published on its own topic under the publish pattern, e.g. <code class="docutils literal notranslate"><span class="pre">modpoll/{device}/data/{ref_name}</span></code>. List values (<code class="docutils literal notranslate"><span class="pre">bool8</span></code> / <code class="docutils literal notranslate"><span class="pre">bool16</span></code>) are split into indexed sub-topics (<code class="docutils literal notranslate"><span class="pre">.../{ref_name}/0</span></code>, <code class="docutils literal notranslate"><span class="pre">.../1</span></code>, …).</p>
+</section>
+<section id="mqtt-publish-on-change">
+<h2>MQTT publish on change<a class="headerlink" href="#mqtt-publish-on-change" title="Link to this heading"></a></h2>
+<p>By default, every poll cycle publishes the current values, even when they are identical to the previous cycle. With <code class="docutils literal notranslate"><span class="pre">--mqtt-on-change</span></code>, modpoll remembers the last successfully published payload per device and only publishes when a value changes:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>modpoll<span class="w"> </span>--tcp<span class="w"> </span><span class="m">192</span>.168.1.10<span class="w"> </span>--mqtt-host<span class="w"> </span>localhost<span class="w"> </span>--mqtt-on-change<span class="w"> </span>--mqtt-qos<span class="w"> </span><span class="m">1</span><span class="w"> </span>--mqtt-retain<span class="w"> </span>--config<span class="w"> </span>examples/modsim.csv
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>The first successful poll for each device is always published.</p></li>
+<li><p>Values are compared after MQTT formatting: floats use 3 decimals; unavailable (<code class="docutils literal notranslate"><span class="pre">null</span></code>) and non-finite values are omitted.</p></li>
+<li><p>A changed <code class="docutils literal notranslate"><span class="pre">timestamp</span></code> alone does not trigger a publication; <code class="docutils literal notranslate"><span class="pre">--timestamp</span></code> only refreshes when data also changes.</p></li>
+<li><p>With <code class="docutils literal notranslate"><span class="pre">--mqtt-single</span></code>, only the changed references are published.</p></li>
+<li><p>The cache is invalidated, and the full payload republished, after an MQTT reconnect, after a publish error, and when a device recovers from a poll failure, so recovery is visible even if values are unchanged.</p></li>
+<li><p>Delivery remains best-effort at QoS 0: a publication silently lost between the gateway and the broker cannot be detected. Use <code class="docutils literal notranslate"><span class="pre">--mqtt-qos</span> <span class="pre">1</span></code> when missed changes matter, and <code class="docutils literal notranslate"><span class="pre">--mqtt-retain</span></code> so consumers that connect later still receive unchanged values.</p></li>
+</ul>
 </section>
 <section id="publish-behavior">
 <h2>Publish behavior<a class="headerlink" href="#publish-behavior" title="Link to this heading"></a></h2>

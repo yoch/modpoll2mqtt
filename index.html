@@ -4,16 +4,18 @@
 <html class="writer-html5" lang="en" data-content_root="./">
 <head>
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta content="Command-line Modbus RTU/TCP/UDP to MQTT gateway: polls devices from CSV register maps, publishes values to MQTT and writes registers by name. Fork of modpoll." name="description" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Welcome to modpoll2mqtt’s documentation! &mdash; modpoll2mqtt 2.3.1 documentation</title>
+  <title>modpoll2mqtt documentation &mdash; modpoll2mqtt – Modbus (RTU/TCP/UDP) to MQTT gateway</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
 
   
+    <link rel="canonical" href="https://yoch.github.io/modpoll2mqtt/index.html" />
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=67b02a41"></script>
+      <script src="_static/documentation_options.js?v=4d935f96"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -65,9 +67,9 @@
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
       <li><a href="#" class="icon icon-home" aria-label="Home"></a></li>
-      <li class="breadcrumb-item active">Welcome to modpoll2mqtt’s documentation!</li>
+      <li class="breadcrumb-item active">modpoll2mqtt documentation</li>
       <li class="wy-breadcrumbs-aside">
-            <a href="_sources/index.rst.txt" rel="nofollow"> View page source</a>
+              <a href="https://github.com/yoch/modpoll2mqtt/blob/main/docs/index.rst" class="fa fa-github"> Edit on GitHub</a>
       </li>
   </ul>
   <hr/>
@@ -75,10 +77,11 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="welcome-to-modpoll2mqtt-s-documentation">
-<h1>Welcome to modpoll2mqtt’s documentation!<a class="headerlink" href="#welcome-to-modpoll2mqtt-s-documentation" title="Link to this heading"></a></h1>
+  <section id="modpoll2mqtt-documentation">
+<h1>modpoll2mqtt documentation<a class="headerlink" href="#modpoll2mqtt-documentation" title="Link to this heading"></a></h1>
 <p><strong>modpoll2mqtt</strong> is a command-line Modbus-to-MQTT gateway. Install it with <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">modpoll2mqtt</span></code> and run the <code class="docutils literal notranslate"><span class="pre">modpoll</span></code> command.</p>
 <p>It polls Modbus devices (RTU, TCP, UDP) using CSV configuration files, publishes values to an MQTT broker, and supports semantic write commands by CSV reference name.</p>
+<p>Package on <a class="reference external" href="https://pypi.org/project/modpoll2mqtt/">PyPI</a>, source code and issues on <a class="reference external" href="https://github.com/yoch/modpoll2mqtt">GitHub</a>.</p>
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul>
@@ -108,6 +111,7 @@
 <li class="toctree-l2"><a class="reference internal" href="usage.html#mqtt-diagnostics">MQTT diagnostics</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage.html#mqtt-payload-keys">MQTT payload keys</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage.html#mqtt-single-publish">MQTT single publish</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#mqtt-publish-on-change">MQTT publish on change</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage.html#publish-behavior">Publish behavior</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage.html#mqtt-write-commands">MQTT write commands</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage.html#mqtt-on-demand-read-get">MQTT on-demand read (get)</a></li>
@@ -130,13 +134,14 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#id1">2.3.1 (2026-10-11)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#section-1">2.3.0 (2026-10-11)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#section-2">2.2.0 (2026-06-16)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#section-3">2.1.2 (2026-06-15)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#section-4">2.1.1 (2026-06-11)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#section-5">2.1.0 (2026-06-10)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#section-6">2.0.0 (2026-06-10)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#id1">2.4.0 (2026-10-20)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#section-1">2.3.1 (2026-10-11)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#section-2">2.3.0 (2026-10-11)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#section-3">2.2.0 (2026-06-16)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#section-4">2.1.2 (2026-06-15)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#section-5">2.1.1 (2026-06-11)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#section-6">2.1.0 (2026-06-10)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#section-7">2.0.0 (2026-06-10)</a></li>
 </ul>
 </li>
 </ul>
