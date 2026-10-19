@@ -361,7 +361,10 @@ def get_parser() -> ModpollArgumentParser:
     parser.add_argument(
         "--mqtt-on-change",
         action="store_true",
-        help="Publish MQTT data only when Modbus data has changed.",
+        help=(
+            "Publish data only when the MQTT-formatted values change. "
+            "Recommended with --mqtt-qos 1 and --mqtt-retain."
+        ),
     )
     parser.add_argument(
         "--mqtt-keys",
